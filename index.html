@@ -451,8 +451,8 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 <script>
 const SHEET_URLS = {
   outdoor_models:   'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFfdxdaUT_qzJQ1OCka1FaJNqyPEECV2lWxX_7XIhNwQYUD3RtI3nrZueTB0xZyQc8WEa10RmI-lzr/pub?gid=0&single=true&output=csv',
-  indoor_models:    'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFfdxdaUT_qzJQ1OCka1FaJNqyPEECV2lWxX_7XIhNwQYUD3RtI3nrZueTB0xZyQc8WEa10RmI-lzr/pub?gid=1108933815&single=true&output=csv',
-  outdoor_handmade: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFfdxdaUT_qzJQ1OCka1FaJNqyPEECV2lWxX_7XIhNwQYUD3RtI3nrZueTB0xZyQc8WEa10RmI-lzr/pub?gid=1089529336&single=true&output=csv',
+  outdoor_handmade: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFfdxdaUT_qzJQ1OCka1FaJNqyPEECV2lWxX_7XIhNwQYUD3RtI3nrZueTB0xZyQc8WEa10RmI-lzr/pub?gid=1108933815&single=true&output=csv',
+  indoor_models:    'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFfdxdaUT_qzJQ1OCka1FaJNqyPEECV2lWxX_7XIhNwQYUD3RtI3nrZueTB0xZyQc8WEa10RmI-lzr/pub?gid=1089529336&single=true&output=csv',
   indoor_handmade:  'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFfdxdaUT_qzJQ1OCka1FaJNqyPEECV2lWxX_7XIhNwQYUD3RtI3nrZueTB0xZyQc8WEa10RmI-lzr/pub?gid=1858072895&single=true&output=csv',
   etns:             'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFfdxdaUT_qzJQ1OCka1FaJNqyPEECV2lWxX_7XIhNwQYUD3RtI3nrZueTB0xZyQc8WEa10RmI-lzr/pub?gid=388429021&single=true&output=csv',
 };
@@ -482,9 +482,15 @@ function parseCSV(text) {
 function buildOutdoorDigits(rows) {
   const map = {};
   rows.forEach(r => {
-    if (!r.MODEL) return;
-    if (!map[r.MODEL]) map[r.MODEL] = [];
-    map[r.MODEL].push({ digit: r.DIGITS, qty: parseFloat(r.QTY) || 0 });
+    const model = (r.MODEL || '').trim();
+    const digit = (r.DIGITS || '').trim();
+    const qty   = parseFloat(r.QTY) || 0;
+    if (!model) return;
+    if (/^(MODEL|O-SUBCON)$/.test(model)) return;
+    if (model.startsWith('LXCUSTOM')) return;
+    if (!digit || qty === 0) return;
+    if (!map[model]) map[model] = [];
+    map[model].push({ digit, qty });
   });
   return map;
 }
@@ -511,9 +517,15 @@ function buildIndoorDigits(rows) {
 function buildHandmadeDigits(rows) {
   const map = {};
   rows.forEach(r => {
-    if (!r.MODEL) return;
-    if (!map[r.MODEL]) map[r.MODEL] = [];
-    map[r.MODEL].push({ digit: r.DIGITS, qty: parseInt(r.QTY) || 0 });
+    const model = (r.MODEL || '').trim();
+    const digit = (r.DIGITS || '').trim();
+    const qty   = parseInt(r.QTY) || 0;
+    if (!model) return;
+    if (/^(MODEL|O-SUBCON|I-SUBCON)$/.test(model)) return;
+    if (model.startsWith('LXCUSTOM')) return;
+    if (!digit || qty === 0) return;
+    if (!map[model]) map[model] = [];
+    map[model].push({ digit, qty });
   });
   return map;
 }
