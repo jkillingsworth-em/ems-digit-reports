@@ -535,29 +535,14 @@ function buildETNs(rows) {
 }
 
 async function fetchCSV(url) {
-  const proxies = [
-    'https://corsproxy.io/?' + encodeURIComponent(url),
-    'https://thingproxy.freeboard.io/fetch/' + url,
-    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
-  ];
-  let lastErr;
-  for (const proxyUrl of proxies) {
-    try {
-      const res = await fetch(proxyUrl, { mode: 'cors' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const text = await res.text();
-      // Must look like CSV - starts with a letter and has commas
-      if (text && text.length > 20 && text.includes(',') && /^[A-Za-z]/.test(text.trim())) {
-        console.log('fetchCSV OK via:', proxyUrl.split('?')[0].split('/fetch/')[0]);
-        return text;
-      }
-      throw new Error('response does not look like CSV');
-    } catch(e) {
-      lastErr = e;
-      continue;
-    }
-  }
-  throw new Error('All proxies failed for ' + url.split('gid=')[1] + ': ' + lastErr);
+  // Use our own Vercel serverless proxy - no CORS issues
+  const proxyUrl = '/api/sheets?url=' + encodeURIComponent(url);
+  const res = await fetch(proxyUrl);
+  if (!res.ok) throw new Error('Proxy error HTTP ' + res.status);
+  const text = await res.text();
+  if (!text || text.length < 20) throw new Error('Empty response from proxy');
+  console.log('fetchCSV OK, first line:', text.split('\n')[0].substring(0, 60));
+  return text;
 }
 
 async function loadAllData() {
