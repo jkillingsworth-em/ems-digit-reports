@@ -498,16 +498,13 @@ function buildOutdoorDigits(rows) {
 function buildIndoorDigits(rows) {
   const map = {};
   rows.forEach(r => {
-    const keys = Object.keys(r);
-    // Try standard header names first, fall back to column index
-    const model = (r['MODEL'] || r[keys[0]] || '').trim();
-    const digit = (r['DIGITS'] || r[keys[1]] || '').trim();
-    const qty   = parseFloat(r['QTY'] || r[keys[2]]) || 0;
-    // Skip blank rows, header rows, subcon rows, custom rows
+    const model = (r.MODEL || '').trim();
+    const digit = (r.DIGITS || '').trim();
+    const qty   = parseFloat(r.QTY) || 0;
     if (!model) return;
-    if (/^(MODEL|INDOOR MODELS|DIGITS|QTY|I-SUBCON)$/i.test(model)) return;
+    if (/^(MODEL|I-SUBCON)$/.test(model)) return;
     if (model.startsWith('LXCUSTOM')) return;
-    if (!digit) return;
+    if (!digit || qty === 0) return;
     if (!map[model]) map[model] = [];
     map[model].push({ digit, qty });
   });
