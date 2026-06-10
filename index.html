@@ -493,12 +493,17 @@ function buildIndoorDigits(rows) {
   const map = {};
   rows.forEach(r => {
     const keys = Object.keys(r);
-    const model = (r[keys[0]] || '').trim();
-    const digit = (r[keys[1]] || '').trim();
-    const qty   = parseFloat(r[keys[2]]) || 0;
-    if (!model || model === 'INDOOR MODELS' || model.startsWith('LXCUSTOM') || model === 'I-SUBCON') return;
+    // Try standard header names first, fall back to column index
+    const model = (r['MODEL'] || r[keys[0]] || '').trim();
+    const digit = (r['DIGITS'] || r[keys[1]] || '').trim();
+    const qty   = parseFloat(r['QTY'] || r[keys[2]]) || 0;
+    // Skip blank rows, header rows, subcon rows, custom rows
+    if (!model) return;
+    if (/^(MODEL|INDOOR MODELS|DIGITS|QTY|I-SUBCON)$/i.test(model)) return;
+    if (model.startsWith('LXCUSTOM')) return;
+    if (!digit) return;
     if (!map[model]) map[model] = [];
-    if (digit) map[model].push({ digit, qty });
+    map[model].push({ digit, qty });
   });
   return map;
 }
@@ -530,26 +535,29 @@ function buildETNs(rows) {
 }
 
 async function fetchCSV(url) {
-  // Try allorigins first (works well with Google Sheets published CSVs)
   const proxies = [
-    'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
     'https://corsproxy.io/?' + encodeURIComponent(url),
-    url, // direct last resort
+    'https://thingproxy.freeboard.io/fetch/' + url,
+    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
   ];
   let lastErr;
   for (const proxyUrl of proxies) {
     try {
-      const res = await fetch(proxyUrl);
+      const res = await fetch(proxyUrl, { mode: 'cors' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const text = await res.text();
-      if (text && text.length > 10) return text;
-      throw new Error('empty response');
+      // Must look like CSV - starts with a letter and has commas
+      if (text && text.length > 20 && text.includes(',') && /^[A-Za-z]/.test(text.trim())) {
+        console.log('fetchCSV OK via:', proxyUrl.split('?')[0].split('/fetch/')[0]);
+        return text;
+      }
+      throw new Error('response does not look like CSV');
     } catch(e) {
       lastErr = e;
       continue;
     }
   }
-  throw new Error('All fetch attempts failed: ' + lastErr);
+  throw new Error('All proxies failed for ' + url.split('gid=')[1] + ': ' + lastErr);
 }
 
 async function loadAllData() {
