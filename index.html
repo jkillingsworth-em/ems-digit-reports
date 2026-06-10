@@ -896,9 +896,11 @@ function renderCustomPicker(o) {
   const standard = ind ? DB.custom_indoor_standard : DB.custom_outdoor_standard;
   const handmade = ind ? DB.custom_indoor_handmade : DB.custom_outdoor_handmade;
   const key = o.order + '_' + o.model;
-  const saved = customData[key] || { digits: [] };
+  const safeKey = key.replace(/[^a-zA-Z0-9]/g,'_');
+  const saved = customData[key] || { digits: [], etn: {} };
   const savedMap = {};
   (saved.digits || []).forEach(d => { savedMap[d.desc] = d.qty; });
+  const savedEtn = saved.etn || {};
 
   const makeRow = (desc, sectionKey) => {
     const safeId = desc.replace(/[^a-zA-Z0-9]/g,'_');
@@ -928,22 +930,61 @@ function renderCustomPicker(o) {
       <div class="picker-grid">${s.items.map(d => makeRow(d, s.key)).join('')}</div>
     </div>`).join('');
 
+  // ETN section — only shown when order has ETN = true
+  const etnSectionHtml = o.etn ? `
+    <div class="picker-group">
+      <div class="picker-section-label" style="color:var(--blue)">ETN UPGRADE</div>
+      <div style="padding:10px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+        <div>
+          <div style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;margin-bottom:4px">PANEL SIZE</div>
+          <input type="text" class="picker-qty-input" id="etn_size_${safeKey}"
+            placeholder="e.g. 9X56" value="${savedEtn.size || o.etnSize || ''}"
+            style="width:100%;text-align:left;text-transform:uppercase"
+            oninput="onEtnChange('${key}')">
+        </div>
+        <div>
+          <div style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;margin-bottom:4px">FULL ETN QTY</div>
+          <input type="number" class="picker-qty-input" id="etn_full_qty_${safeKey}"
+            placeholder="0" min="0" value="${savedEtn.full_qty || ''}"
+            style="width:100%"
+            oninput="onEtnChange('${key}')">
+        </div>
+        <div>
+          <div style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;margin-bottom:4px">HALF ETN QTY</div>
+          <input type="number" class="picker-qty-input" id="etn_half_qty_${safeKey}"
+            placeholder="0" min="0" value="${savedEtn.half_qty || ''}"
+            style="width:100%"
+            oninput="onEtnChange('${key}')">
+        </div>
+      </div>
+    </div>` : '';
+
   const footerHtml = renderPickerSummary(o);
 
-  return `<div class="custom-picker" id="picker_${key.replace(/[^a-zA-Z0-9]/g,'_')}">
+  return `<div class="custom-picker" id="picker_${safeKey}">
     <div class="custom-picker-header">
       <div>
         <span class="custom-picker-title">${ind ? 'INDOOR' : 'OUTDOOR'} CUSTOM — Select Digits</span>
-        <span class="custom-picker-sub">Order #${o.order} · ${o.model} · ×${o.qty}</span>
+        <span class="custom-picker-sub">Order #${o.order} · ${o.model} · ×${o.qty}${o.etn ? ' · <span style="color:var(--blue)">ETN</span>' : ''}</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         <button class="btn btn-danger btn-sm" onclick="clearCustomDigits('${key}')">Clear</button>
         <button class="btn btn-primary btn-sm" onclick="saveCustomDigits('${key}')">✓ Save</button>
       </div>
     </div>
+    ${etnSectionHtml}
     ${sectionHtml}
-    <div class="picker-footer" id="pfooter_${key.replace(/[^a-zA-Z0-9]/g,'_')}">${footerHtml}</div>
+    <div class="picker-footer" id="pfooter_${safeKey}">${footerHtml}</div>
   </div>`;
+}
+
+function onEtnChange(key) {
+  const safeKey = key.replace(/[^a-zA-Z0-9]/g,'_');
+  const size     = (document.getElementById('etn_size_' + safeKey)?.value || '').toUpperCase().trim();
+  const fullQty  = parseInt(document.getElementById('etn_full_qty_' + safeKey)?.value) || 0;
+  const halfQty  = parseInt(document.getElementById('etn_half_qty_' + safeKey)?.value) || 0;
+  if (!customData[key]) customData[key] = { digits: [], etn: {} };
+  customData[key].etn = { size, full_qty: fullQty, half_qty: halfQty };
 }
 
 function onPickerChange(input) {
@@ -989,8 +1030,19 @@ function saveCustomDigits(key) {
   const safeKey = key.replace(/[^a-zA-Z0-9]/g,'_');
   const inputs = document.querySelectorAll(`#picker_${safeKey} .picker-qty-input`);
   const digits = [];
-  inputs.forEach(inp => { const q=parseInt(inp.value)||0; if(q>0) digits.push({desc:inp.dataset.desc,qty:q}); });
-  customData[key] = { digits };
+  inputs.forEach(inp => {
+    if (!inp.dataset.desc) return; // skip ETN inputs (no data-desc)
+    const q = parseInt(inp.value)||0;
+    if (q > 0) digits.push({desc: inp.dataset.desc, qty: q});
+  });
+  // Preserve ETN data if already set via onEtnChange
+  const existingEtn = customData[key]?.etn || {};
+  // Also read ETN fields directly in case save clicked without blur
+  const size    = (document.getElementById('etn_size_' + safeKey)?.value || '').toUpperCase().trim();
+  const fullQty = parseInt(document.getElementById('etn_full_qty_' + safeKey)?.value) || 0;
+  const halfQty = parseInt(document.getElementById('etn_half_qty_' + safeKey)?.value) || 0;
+  const etn = o.etn ? { size: size || existingEtn.size, full_qty: fullQty || existingEtn.full_qty, half_qty: halfQty || existingEtn.half_qty } : {};
+  customData[key] = { digits, etn };
   const btn = document.querySelector(`#picker_${safeKey} .btn-primary`);
   if (btn) { btn.textContent = '✓ Saved!'; setTimeout(()=>btn.textContent='✓ Save',1500); }
   renderFlagsPanel();
@@ -1002,6 +1054,13 @@ function clearCustomDigits(key) {
   document.querySelectorAll(`#picker_${safeKey} .picker-qty-input`).forEach(i=>i.value='');
   document.querySelectorAll(`#picker_${safeKey} .picker-row`).forEach(r=>r.classList.remove('picker-row-active'));
   document.querySelectorAll(`#picker_${safeKey} .picker-total`).forEach(t=>t.innerHTML='');
+  // Clear ETN fields
+  const etnSize = document.getElementById('etn_size_' + safeKey);
+  const etnFull = document.getElementById('etn_full_qty_' + safeKey);
+  const etnHalf = document.getElementById('etn_half_qty_' + safeKey);
+  if (etnSize) etnSize.value = '';
+  if (etnFull) etnFull.value = '';
+  if (etnHalf) etnHalf.value = '';
   const footer = document.getElementById(`pfooter_${safeKey}`);
   if (footer) footer.innerHTML = '<span style="color:var(--muted);font-size:0.78rem">No digits selected yet</span>';
   renderOrderList();
@@ -1156,14 +1215,20 @@ function renderSummary() {
   if (etnOrders.length) {
     const etnRow = o => {
       const e = getETN(o.model) || {};
-      const half = (e.half_size && e.half_size !== '-' && e.half_size !== '') ? `${e.half_size} × ${e.half_qty}` : '—';
+      const cd = isCustom(o.model) ? (customData[o.order+'_'+o.model]?.etn || {}) : {};
+      const panelSize = cd.size || o.etnSize || e.upgrade_size || '—';
+      const fullSize  = e.full_size || '—';
+      const fullQty   = cd.full_qty || e.full_qty || '—';
+      const halfSize  = e.half_size && e.half_size !== '-' && e.half_size !== '' ? e.half_size : '—';
+      const halfQty   = cd.half_qty || (halfSize !== '—' ? e.half_qty : '—');
+      const half = halfSize !== '—' ? `${halfSize} × ${halfQty}` : '—';
       return `<tr>
         <td class="mono">${o.order}</td>
         <td class="mono">×${o.qty}</td>
-        <td><strong>${o.model}</strong></td>
+        <td><strong>${o.model}</strong>${isCustom(o.model) ? ' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>' : ''}</td>
         <td>${colorTag(o)}</td>
-        <td class="mono">${o.etnSize || e.upgrade_size || '—'}</td>
-        <td class="mono">${e.full_size || '—'} × ${e.full_qty || '—'}</td>
+        <td class="mono">${panelSize}</td>
+        <td class="mono">${fullSize} × ${fullQty}</td>
         <td class="mono">${half}</td>
       </tr>`;
     };
