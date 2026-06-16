@@ -771,16 +771,39 @@ function renderCustomPicker(o) {
   const footerHtml = renderPickerSummary(o);
 
   // ETN panel for custom orders that have ETN=TRUE
-  const savedEtnSize = customData[key]?.etnSize || o.etnSize || '';
+  const savedEtn = customData[key]?.etn || {};
+  const savedEtnPanelSize = savedEtn.panelSize || o.etnSize || '';
+  const savedEtnFullSize  = savedEtn.fullSize  || '';
+  const savedEtnFullQty   = savedEtn.fullQty   || '';
+  const savedEtnHalfSize  = savedEtn.halfSize  || '';
+  const savedEtnHalfQty   = savedEtn.halfQty   || '';
+  const sk = key.replace(/[^a-zA-Z0-9]/g,'_');
   const etnPickerHtml = o.etn ? `
     <div class="picker-group">
       <div class="picker-section-label" style="color:var(--blue)">ETN UPGRADE</div>
-      <div style="padding:10px 16px;display:flex;align-items:center;gap:12px;">
-        <div class="picker-name" style="color:var(--blue)">Panel Size</div>
-        <input type="text" id="etn_size_${key.replace(/[^a-zA-Z0-9]/g,'_')}"
-          class="picker-qty-input" style="width:100px;text-align:left;text-transform:uppercase;"
-          placeholder="e.g. 9X48" value="${savedEtnSize}"
-          oninput="onEtnSizeChange(this,'${key}')">
+      <div style="padding:8px 16px;display:grid;grid-template-columns:130px 1fr;align-items:center;gap:8px 12px;">
+        <span style="font-size:0.8rem;color:var(--blue)">Panel Size</span>
+        <input type="text" id="etn_panel_${sk}" class="picker-qty-input"
+          style="width:90px;text-align:left;text-transform:uppercase;"
+          placeholder="e.g. 9X56" value="${savedEtnPanelSize}">
+        <span style="font-size:0.8rem;color:var(--muted)">Full ETN Size</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" id="etn_full_size_${sk}" class="picker-qty-input"
+            style="width:90px;text-align:left;text-transform:uppercase;"
+            placeholder="e.g. 9X16" value="${savedEtnFullSize}">
+          <span style="color:var(--muted);font-size:0.8rem">&times;</span>
+          <input type="number" id="etn_full_qty_${sk}" class="picker-qty-input"
+            style="width:60px;" min="0" placeholder="qty" value="${savedEtnFullQty}">
+        </div>
+        <span style="font-size:0.8rem;color:var(--muted)">Half ETN Size <span style="opacity:0.5">(opt)</span></span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" id="etn_half_size_${sk}" class="picker-qty-input"
+            style="width:90px;text-align:left;text-transform:uppercase;"
+            placeholder="e.g. 9x8" value="${savedEtnHalfSize}">
+          <span style="color:var(--muted);font-size:0.8rem">&times;</span>
+          <input type="number" id="etn_half_qty_${sk}" class="picker-qty-input"
+            style="width:60px;" min="0" placeholder="qty" value="${savedEtnHalfQty}">
+        </div>
       </div>
     </div>` : '';
 
@@ -838,24 +861,26 @@ function renderPickerSummary(o) {
   </div>`;
 }
 
-function onEtnSizeChange(select, key) {
-  if (!customData[key]) customData[key] = { digits: [] };
-  customData[key].etnSize = select.value;
-  const o = orders.find(o => (o.order+'_'+o.model) === key);
-  if (o) o.etnSize = select.value;
-}
-
 function saveCustomDigits(key) {
   const o = orders.find(o => (o.order+'_'+o.model) === key);
   if (!o) return;
   const safeKey = key.replace(/[^a-zA-Z0-9]/g,'_');
-  const inputs = document.querySelectorAll(`#picker_${safeKey} .picker-qty-input`);
+  // Collect digit rows (only inputs with data-desc)
   const digits = [];
-  inputs.forEach(inp => { const q=parseInt(inp.value)||0; if(q>0) digits.push({desc:inp.dataset.desc,qty:q}); });
-  const etnSel = document.getElementById('etn_size_' + safeKey);
-  const etnSize = etnSel ? etnSel.value : (customData[key]?.etnSize || '');
-  customData[key] = { digits, etnSize };
-  if (etnSize) o.etnSize = etnSize;
+  document.querySelectorAll(`#picker_${safeKey} .picker-qty-input[data-desc]`).forEach(inp => {
+    const q = parseInt(inp.value)||0; if(q>0) digits.push({desc:inp.dataset.desc, qty:q});
+  });
+  // Collect ETN fields if present
+  const g = id => (document.getElementById(id+'_'+safeKey)||{}).value || '';
+  const etnData = o.etn ? {
+    panelSize : g('etn_panel').toUpperCase(),
+    fullSize  : g('etn_full_size').toUpperCase(),
+    fullQty   : g('etn_full_qty'),
+    halfSize  : g('etn_half_size').toUpperCase(),
+    halfQty   : g('etn_half_qty'),
+  } : null;
+  customData[key] = { digits, etn: etnData };
+  if (etnData?.panelSize) o.etnSize = etnData.panelSize;
   const btn = document.querySelector(`#picker_${safeKey} .btn-primary`);
   if (btn) { btn.textContent = '✓ Saved!'; setTimeout(()=>btn.textContent='✓ Save',1500); }
   renderFlagsPanel();
@@ -1017,15 +1042,25 @@ function renderSummary() {
   let etnSection = '';
   if (etnOrders.length) {
     const etnRow = o => {
-      const e = getETN(o.model) || {};
-      const half = (e.half_size && e.half_size !== '-' && e.half_size !== '') ? `${e.half_size} × ${e.half_qty}` : '—';
+      const cust = isCustom(o.model);
+      const e = cust ? {} : (getETN(o.model) || {});
+      const cd = cust ? (customData[o.order+'_'+o.model]?.etn || {}) : null;
+      const panelSize = cust
+        ? (cd?.panelSize || o.etnSize || '—')
+        : (o.etnSize || e.upgrade_size || '—');
+      const fullEtn = cust
+        ? (cd?.fullSize && cd?.fullQty ? `${cd.fullSize} × ${cd.fullQty}` : '—')
+        : ((e.full_size && e.full_qty) ? `${e.full_size} × ${e.full_qty}` : '—');
+      const half = cust
+        ? (cd?.halfSize && cd?.halfQty ? `${cd.halfSize} × ${cd.halfQty}` : '—')
+        : ((e.half_size && e.half_size !== '-' && e.half_size !== '') ? `${e.half_size} × ${e.half_qty}` : '—');
       return `<tr>
         <td class="mono">${o.order}</td>
         <td class="mono">×${o.qty}</td>
         <td><strong>${o.model}</strong></td>
         <td>${colorTag(o)}</td>
-        <td class="mono">${o.etnSize || e.upgrade_size || '—'}</td>
-        <td class="mono">${e.full_size || '—'} × ${e.full_qty || '—'}</td>
+        <td class="mono">${panelSize}</td>
+        <td class="mono">${fullEtn}</td>
         <td class="mono">${half}</td>
       </tr>`;
     };
