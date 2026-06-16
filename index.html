@@ -770,17 +770,35 @@ function renderCustomPicker(o) {
 
   const footerHtml = renderPickerSummary(o);
 
+  // ETN panel for custom orders that have ETN=TRUE
+  const savedEtnSize = customData[key]?.etnSize || o.etnSize || '';
+  const etnPickerHtml = o.etn ? `
+    <div class="picker-group">
+      <div class="picker-section-label" style="color:var(--blue)">ETN UPGRADE</div>
+      <div style="padding:10px 16px;display:flex;align-items:center;gap:12px;">
+        <div class="picker-name" style="color:var(--blue)">Panel Size</div>
+        <select id="etn_size_${key.replace(/[^a-zA-Z0-9]/g,'_')}"
+          style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:4px 8px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;"
+          onchange="onEtnSizeChange(this,'${key}')">
+          <option value="">— select size —</option>
+          ${DB.custom_etn_sizes.map(s => `<option value="${s}"${s===savedEtnSize?' selected':''}>${s}</option>`).join('')}
+        </select>
+        ${savedEtnSize ? `<span class="qty-pill" style="background:rgba(59,130,246,0.12);color:var(--blue)">${savedEtnSize}</span>` : ''}
+      </div>
+    </div>` : '';
+
   return `<div class="custom-picker" id="picker_${key.replace(/[^a-zA-Z0-9]/g,'_')}">
     <div class="custom-picker-header">
       <div>
         <span class="custom-picker-title">${ind ? 'INDOOR' : 'OUTDOOR'} CUSTOM — Select Digits</span>
-        <span class="custom-picker-sub">Order #${o.order} · ${o.model} · ×${o.qty}</span>
+        <span class="custom-picker-sub">Order #${o.order} · ${o.model} · ×${o.qty}${o.etn ? ' · <span style="color:var(--blue)">ETN</span>' : ''}</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         <button class="btn btn-danger btn-sm" onclick="clearCustomDigits('${key}')">Clear</button>
         <button class="btn btn-primary btn-sm" onclick="saveCustomDigits('${key}')">✓ Save</button>
       </div>
     </div>
+    ${etnPickerHtml}
     ${sectionHtml}
     <div class="picker-footer" id="pfooter_${key.replace(/[^a-zA-Z0-9]/g,'_')}">${footerHtml}</div>
   </div>`;
@@ -823,6 +841,13 @@ function renderPickerSummary(o) {
   </div>`;
 }
 
+function onEtnSizeChange(select, key) {
+  if (!customData[key]) customData[key] = { digits: [] };
+  customData[key].etnSize = select.value;
+  const o = orders.find(o => (o.order+'_'+o.model) === key);
+  if (o) o.etnSize = select.value;
+}
+
 function saveCustomDigits(key) {
   const o = orders.find(o => (o.order+'_'+o.model) === key);
   if (!o) return;
@@ -830,7 +855,10 @@ function saveCustomDigits(key) {
   const inputs = document.querySelectorAll(`#picker_${safeKey} .picker-qty-input`);
   const digits = [];
   inputs.forEach(inp => { const q=parseInt(inp.value)||0; if(q>0) digits.push({desc:inp.dataset.desc,qty:q}); });
-  customData[key] = { digits };
+  const etnSel = document.getElementById('etn_size_' + safeKey);
+  const etnSize = etnSel ? etnSel.value : (customData[key]?.etnSize || '');
+  customData[key] = { digits, etnSize };
+  if (etnSize) o.etnSize = etnSize;
   const btn = document.querySelector(`#picker_${safeKey} .btn-primary`);
   if (btn) { btn.textContent = '✓ Saved!'; setTimeout(()=>btn.textContent='✓ Save',1500); }
   renderFlagsPanel();
