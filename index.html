@@ -381,21 +381,12 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 </style>
 </head>
 <body>
-<div id="loadingOverlay" style="display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg);flex-direction:column;gap:16px">
-  <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:4px;color:var(--accent)">EMS DIGIT REPORT</div>
-  <div style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--muted);letter-spacing:2px">LOADING DATA...</div>
-  <div style="width:200px;height:3px;background:var(--border);border-radius:2px;overflow:hidden">
-    <div style="width:40%;height:100%;background:var(--accent);border-radius:2px;animation:loadbar 1.2s ease-in-out infinite alternate"></div>
-  </div>
-  <div class="load-status" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--muted);letter-spacing:1px;margin-top:4px"></div>
-</div>
-<style>@keyframes loadbar{from{transform:translateX(0)}to{transform:translateX(150%)}}</style>
 <header>
   <h1>EMS Digit Report</h1>
   <span>Electro-Mech Scoreboard Co. · Wrightsville, GA</span>
   <span id="headerWeek" class="header-week" style="display:none"></span>
 </header>
-<div class="main" id="appMain" style="display:none">
+<div class="main">
   <div class="sidebar">
     <div class="date-section">
       <div class="sidebar-label" style="margin-bottom:4px">Truck List Week</div>
@@ -415,7 +406,7 @@ tr:hover td { background: rgba(255,255,255,0.018); }
     <div class="sidebar-section">
       <div class="sidebar-label">Add Orders (from truck list)</div>
       <div class="manual-entry">
-        <textarea id="manualInput" placeholder="Paste order data from Claude's report:&#10;DATE, ORDER, QTY, MODEL, COLOR, ETN, ETN_SIZE&#10;&#10;e.g. JUNE 15, 92004, 1, LX1740, AMBER, FALSE,&#10;JUNE 15, 92005, 2, LX2665, , FALSE,&#10;JUNE 16, 92006, 1, LXCUSTOM-O1, RED, TRUE, 9X56"></textarea>
+        <textarea id="manualInput" placeholder="Paste order data from Claude's report:&#10;ORDER, QTY, MODEL, COLOR, ETN, ETN_SIZE&#10;&#10;e.g. 92004, 1, LX1740, AMBER, FALSE,&#10;92005, 2, LX2665, , FALSE,&#10;92006, 1, LXCUSTOM-O1, RED, TRUE, 9X56"></textarea>
         <button class="btn btn-primary btn-full" onclick="parseManualInput()">+ Add Orders</button>
       </div>
     </div>
@@ -449,158 +440,8 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 </div>
 
 <script>
-const SHEET_URLS = {
-  outdoor_models:   'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFfdxdaUT_qzJQ1OCka1FaJNqyPEECV2lWxX_7XIhNwQYUD3RtI3nrZueTB0xZyQc8WEa10RmI-lzr/pub?gid=0&single=true&output=csv',
-  outdoor_handmade: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFfdxdaUT_qzJQ1OCka1FaJNqyPEECV2lWxX_7XIhNwQYUD3RtI3nrZueTB0xZyQc8WEa10RmI-lzr/pub?gid=1108933815&single=true&output=csv',
-  indoor_models:    'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFfdxdaUT_qzJQ1OCka1FaJNqyPEECV2lWxX_7XIhNwQYUD3RtI3nrZueTB0xZyQc8WEa10RmI-lzr/pub?gid=1089529336&single=true&output=csv',
-  indoor_handmade:  'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFfdxdaUT_qzJQ1OCka1FaJNqyPEECV2lWxX_7XIhNwQYUD3RtI3nrZueTB0xZyQc8WEa10RmI-lzr/pub?gid=1858072895&single=true&output=csv',
-  etns:             'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFfdxdaUT_qzJQ1OCka1FaJNqyPEECV2lWxX_7XIhNwQYUD3RtI3nrZueTB0xZyQc8WEa10RmI-lzr/pub?gid=388429021&single=true&output=csv',
-};
-
-let DB = {
-  etn: {}, outdoor_digits: {}, indoor_digits: {},
-  handmade_outdoor: [], handmade_indoor: [],
-  handmade_outdoor_digits: {}, handmade_indoor_digits: {},
-  custom_outdoor_standard: ["11in","15in","18in","24in","30in","BALLS","E","H","MED_POSS","MISC","STRIKES"],
-  custom_outdoor_handmade: ["SM_POSS","11-HALF","15-HALF","18-HALF","24-HALF","3in BALL","3in SO","DOWN","QTR","2B BONUS","1B POSS","SDOWN"],
-  custom_indoor_standard:  ["12F-A","12F-R","12H-A","4MISC-R","6F-A","6F-G","6F-R","9F-A","9F-G","9F-R","9H-A","BONUS","COL/DEC","POSS"],
-  custom_indoor_handmade:  ["12F-G","5R-POSS","5G-BONUS","16F-R","16F-A","16H-A","16R COL/DEC","12Y COL/DEC","9R COL/DEC","9G COL/DEC","9Y COL/DEC","3G 2BULLETBONUS"],
-  custom_etn_sizes:        ["14X16","14X8","7X16","7X8","9X16","9X8"],
-};
-
-function parseCSV(text) {
-  const lines = text.trim().split('\n').map(l => l.replace(/\r/g,''));
-  const headers = lines[0].split(',').map(h => h.trim());
-  return lines.slice(1).map(line => {
-    const vals = line.split(',').map(v => v.trim());
-    const obj = {};
-    headers.forEach((h, i) => obj[h] = vals[i] || '');
-    return obj;
-  });
-}
-
-function buildOutdoorDigits(rows) {
-  const map = {};
-  rows.forEach(r => {
-    const model = (r.MODEL || '').trim();
-    const digit = (r.DIGITS || '').trim();
-    const qty   = parseFloat(r.QTY) || 0;
-    if (!model) return;
-    if (/^(MODEL|O-SUBCON)$/.test(model)) return;
-    if (model.startsWith('LXCUSTOM')) return;
-    if (!digit || qty === 0) return;
-    if (!map[model]) map[model] = [];
-    map[model].push({ digit, qty });
-  });
-  return map;
-}
-
-function buildIndoorDigits(rows) {
-  const map = {};
-  rows.forEach(r => {
-    const model = (r.MODEL || '').trim();
-    const digit = (r.DIGITS || '').trim();
-    const qty   = parseFloat(r.QTY) || 0;
-    if (!model) return;
-    if (/^(MODEL|I-SUBCON)$/.test(model)) return;
-    if (model.startsWith('LXCUSTOM')) return;
-    if (!digit || qty === 0) return;
-    if (!map[model]) map[model] = [];
-    map[model].push({ digit, qty });
-  });
-  return map;
-}
-
-function buildHandmadeDigits(rows) {
-  const map = {};
-  rows.forEach(r => {
-    const model = (r.MODEL || '').trim();
-    const digit = (r.DIGITS || '').trim();
-    const qty   = parseInt(r.QTY) || 0;
-    if (!model) return;
-    if (/^(MODEL|O-SUBCON|I-SUBCON)$/.test(model)) return;
-    if (model.startsWith('LXCUSTOM')) return;
-    if (!digit || qty === 0) return;
-    if (!map[model]) map[model] = [];
-    map[model].push({ digit, qty });
-  });
-  return map;
-}
-
-function buildETNs(rows) {
-  const map = {};
-  rows.forEach(r => {
-    const model = r['Model'];
-    if (!model) return;
-    map[model] = {
-      upgrade_size: r['ETN UPGRADE SIZE'] || '',
-      full_size:    r['Full ETN Size'] || '',
-      full_qty:     r['QTY Full ETN'] || '',
-      half_size:    r['Half ETN Size'] || '',
-      half_qty:     r['QTY Half ETN'] || '',
-    };
-  });
-  return map;
-}
-
-async function fetchCSV(url) {
-  // Use our own Vercel serverless proxy - no CORS issues
-  const proxyUrl = '/api/sheets?url=' + encodeURIComponent(url);
-  const res = await fetch(proxyUrl);
-  if (!res.ok) throw new Error('Proxy error HTTP ' + res.status);
-  const text = await res.text();
-  if (!text || text.length < 20) throw new Error('Empty response from proxy');
-  console.log('fetchCSV OK, first line:', text.split('\n')[0].substring(0, 60));
-  return text;
-}
-
-async function loadAllData() {
-  const loadingEl = document.getElementById('loadingOverlay');
-  const setStatus = msg => { if (loadingEl) loadingEl.querySelector('.load-status').textContent = msg; };
-  try {
-    setStatus('Fetching outdoor model data...');
-    const outdoorTxt = await fetchCSV(SHEET_URLS.outdoor_models);
-    console.log('outdoor first line:', outdoorTxt.split('\n')[0]);
-
-    setStatus('Fetching indoor model data...');
-    const indoorTxt = await fetchCSV(SHEET_URLS.indoor_models);
-    console.log('indoor first line:', indoorTxt.split('\n')[0]);
-
-    setStatus('Fetching handmade data...');
-    const outHMTxt = await fetchCSV(SHEET_URLS.outdoor_handmade);
-    const inHMTxt  = await fetchCSV(SHEET_URLS.indoor_handmade);
-
-    setStatus('Fetching ETN data...');
-    const etnTxt = await fetchCSV(SHEET_URLS.etns);
-    console.log('etn first line:', etnTxt.split('\n')[0]);
-
-    setStatus('Building data...');
-    const outdoorRows = parseCSV(outdoorTxt);
-    console.log('outdoor rows:', outdoorRows.length, 'sample:', JSON.stringify(outdoorRows[0]));
-
-    DB.outdoor_digits          = buildOutdoorDigits(outdoorRows);
-    console.log('outdoor models loaded:', Object.keys(DB.outdoor_digits).length);
-
-    const indoorRows = parseCSV(indoorTxt);
-    console.log('indoor rows:', indoorRows.length, 'sample:', JSON.stringify(indoorRows[0]));
-
-    DB.indoor_digits           = buildIndoorDigits(indoorRows);
-    console.log('indoor models loaded:', Object.keys(DB.indoor_digits).length);
-
-    DB.handmade_outdoor_digits = buildHandmadeDigits(parseCSV(outHMTxt));
-    DB.handmade_indoor_digits  = buildHandmadeDigits(parseCSV(inHMTxt));
-    DB.handmade_outdoor        = Object.keys(DB.handmade_outdoor_digits);
-    DB.handmade_indoor         = Object.keys(DB.handmade_indoor_digits);
-    DB.etn                     = buildETNs(parseCSV(etnTxt));
-    console.log('ETN models loaded:', Object.keys(DB.etn).length);
-
-    if (loadingEl) loadingEl.style.display = 'none';
-    document.getElementById('appMain').style.display = 'flex';
-  } catch(err) {
-    if (loadingEl) loadingEl.innerHTML = '<div style="color:#e74c3c;font-family:monospace;padding:30px;font-size:0.85rem;line-height:1.8">Failed to load data from Google Sheets.<br>Check your connection and refresh.<br><br><strong>' + err + '</strong></div>';
-    console.error('Data load error:', err);
-  }
-}
+const DB = {"etn":{"LX1060":{"upgrade_size":"9 x 32","full_size":"9X16","full_qty":"4","half_size":"-","half_qty":"-"},"LX1070":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1160":{"upgrade_size":"9 x 32","full_size":"9X16","full_qty":"4","half_size":"-","half_qty":"-"},"LX1161":{"upgrade_size":"9 x 32","full_size":"9X16","full_qty":"4","half_size":"-","half_qty":"-"},"LX1162":{"upgrade_size":"9 x 32","full_size":"9X16","full_qty":"4","half_size":"-","half_qty":"-"},"LX1164":{"upgrade_size":"9 x 32","full_size":"9X16","full_qty":"4","half_size":"-","half_qty":"-"},"LX1165":{"upgrade_size":"9 x 32","full_size":"9X16","full_qty":"4","half_size":"-","half_qty":"-"},"LX1166":{"upgrade_size":"9 x 32","full_size":"9X16","full_qty":"4","half_size":"-","half_qty":"-"},"LX1168":{"upgrade_size":"9 x 32","full_size":"9X16","full_qty":"4","half_size":"-","half_qty":"-"},"LX1240":{"upgrade_size":"9 x 40","full_size":"9X16","full_qty":"4","half_size":"9x8","half_qty":"2"},"LX1241":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX1244":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX1250":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX1260":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX1370":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1371":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1372":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1373":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1374":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1376":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1377":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1390":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX1440":{"upgrade_size":"14 x 72","full_size":"7X16","full_qty":"16","half_size":"7x8","half_qty":"4"},"LX1480":{"upgrade_size":"14 x 72","full_size":"7X16","full_qty":"16","half_size":"7x8","half_qty":"4"},"LX1486":{"upgrade_size":"14 x 72","full_size":"7X16","full_qty":"16","half_size":"7x8","half_qty":"4"},"LX1700":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX1710":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1711":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1712":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1713":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1714":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1716":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1717":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1720":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1730":{"upgrade_size":"9 x 64","full_size":"9X16","full_qty":"8","half_size":"-","half_qty":"-"},"LX1731":{"upgrade_size":"9 x 64","full_size":"9X16","full_qty":"8","half_size":"-","half_qty":"-"},"LX1732":{"upgrade_size":"9 x 64","full_size":"9X16","full_qty":"8","half_size":"-","half_qty":"-"},"LX1733":{"upgrade_size":"9 x 64","full_size":"9X16","full_qty":"8","half_size":"-","half_qty":"-"},"LX1734":{"upgrade_size":"9 x 64","full_size":"9X16","full_qty":"8","half_size":"-","half_qty":"-"},"LX1736":{"upgrade_size":"9 x 64","full_size":"9X16","full_qty":"8","half_size":"-","half_qty":"-"},"LX1737":{"upgrade_size":"9 x 64","full_size":"9X16","full_qty":"8","half_size":"-","half_qty":"-"},"LX1740":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1741":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1742":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1743":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1744":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1746":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX1750":{"upgrade_size":"14 x 80","full_size":"7X16","full_qty":"20","half_size":"-","half_qty":"-"},"LX1751":{"upgrade_size":"14 x 80","full_size":"7X16","full_qty":"20","half_size":"-","half_qty":"-"},"LX1752":{"upgrade_size":"14 x 80","full_size":"7X16","full_qty":"20","half_size":"-","half_qty":"-"},"LX1753":{"upgrade_size":"14 x 80","full_size":"7X16","full_qty":"20","half_size":"-","half_qty":"-"},"LX1754":{"upgrade_size":"14 x 80","full_size":"7X16","full_qty":"20","half_size":"-","half_qty":"-"},"LX1756":{"upgrade_size":"14 x 80","full_size":"7X16","full_qty":"20","half_size":"-","half_qty":"-"},"LX1780":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX1781":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX1782":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX1783":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX1784":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX1786":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX2340":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX2350":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX2370":{"upgrade_size":"14 x 72","full_size":"14x16","full_qty":"10","half_size":"14x8","half_qty":"2"},"LX2545":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX2550":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX2555":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX2556":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX2570":{"upgrade_size":"14 x 72","full_size":"14x16","full_qty":"10","half_size":"14x8","half_qty":"2"},"LX2575":{"upgrade_size":"14 x 72","full_size":"14x16","full_qty":"10","half_size":"14x8","half_qty":"2"},"LX2576":{"upgrade_size":"14 x 72","full_size":"14x16","full_qty":"10","half_size":"14x8","half_qty":"2"},"LX2645":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX2655":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX2665":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX2745":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX2770":{"upgrade_size":"14 x 72","full_size":"14x16","full_qty":"10","half_size":"14x8","half_qty":"2"},"LX3130":{"upgrade_size":"9 x 40","full_size":"9X16","full_qty":"4","half_size":"9x8","half_qty":"2"},"LX3140":{"upgrade_size":"9 x 40","full_size":"9X16","full_qty":"4","half_size":"9x8","half_qty":"2"},"LX3150":{"upgrade_size":"9 x 40","full_size":"9X16","full_qty":"4","half_size":"9x8","half_qty":"2"},"LX3230":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX3250":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX3320":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX3325":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX3340":{"upgrade_size":"9 x 64","full_size":"9X16","full_qty":"8","half_size":"-","half_qty":"-"},"LX3360":{"upgrade_size":"14 x 80","full_size":"7X16","full_qty":"20","half_size":"-","half_qty":"-"},"LX3365":{"upgrade_size":"14 x 72","full_size":"7X16","full_qty":"16","half_size":"-","half_qty":"-"},"LX3450":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"},"LX3620":{"upgrade_size":"9 x 72","full_size":"9X16","full_qty":"8","half_size":"9x8","half_qty":"2"},"LX3625":{"upgrade_size":"9 x 64","full_size":"9X16","full_qty":"8","half_size":"-","half_qty":"-"},"LX3630":{"upgrade_size":"14 x 72","full_size":"7X16","full_qty":"16","half_size":"7x8","half_qty":"4"},"LX3640":{"upgrade_size":"14 x 96","full_size":"7X16","full_qty":"24","half_size":"-","half_qty":"-"},"LX3645":{"upgrade_size":"14 x 88","full_size":"7X16","full_qty":"20","half_size":"7x8","half_qty":"4"},"LX3650":{"upgrade_size":"14 x 96","full_size":"7X16","full_qty":"24","half_size":"-","half_qty":"-"},"LX3655":{"upgrade_size":"14 x 88","full_size":"7X16","full_qty":"20","half_size":"7x8","half_qty":"4"},"LX3680":{"upgrade_size":"14 x 96","full_size":"7X16","full_qty":"24","half_size":"-","half_qty":"-"},"LX3685":{"upgrade_size":"14 x 88","full_size":"7X16","full_qty":"20","half_size":"7x8","half_qty":"4"},"LX3690":{"upgrade_size":"14 x 96","full_size":"7X16","full_qty":"24","half_size":"-","half_qty":"-"},"LX3695":{"upgrade_size":"14 x 88","full_size":"7X16","full_qty":"20","half_size":"7x8","half_qty":"4"},"LX3740":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX3745":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX3780":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX3785":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX3840":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX3845":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX3880":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX3885":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX6430":{"upgrade_size":"9 x 64","full_size":"9X16","full_qty":"8","half_size":"-","half_qty":"-"},"LX6434":{"upgrade_size":"9 x 64","full_size":"9X16","full_qty":"8","half_size":"-","half_qty":"-"},"LX6435":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX6436":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX6540":{"upgrade_size":"14 x 88","full_size":"7X16","full_qty":"20","half_size":"7x8","half_qty":"4"},"LX6544":{"upgrade_size":"14 x 88","full_size":"7X16","full_qty":"20","half_size":"7x8","half_qty":"4"},"LX6545":{"upgrade_size":"14 x 80","full_size":"7X16","full_qty":"20","half_size":"-","half_qty":"-"},"LX6546":{"upgrade_size":"14 x 80","full_size":"7X16","full_qty":"20","half_size":"-","half_qty":"-"},"LX6630":{"upgrade_size":"9 x 40","full_size":"9X16","full_qty":"4","half_size":"9x8","half_qty":"2"},"LX6650":{"upgrade_size":"9 x 40","full_size":"9X16","full_qty":"4","half_size":"9x8","half_qty":"2"},"LX6655":{"upgrade_size":"9 x 40","full_size":"9X16","full_qty":"4","half_size":"9x8","half_qty":"2"},"LX6740":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX6744":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX6745":{"upgrade_size":"14 x 96","full_size":"7X16","full_qty":"24","half_size":"-","half_qty":"-"},"LX6746":{"upgrade_size":"14 x 96","full_size":"7X16","full_qty":"24","half_size":"-","half_qty":"-"},"LX6940":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX6944":{"upgrade_size":"14 x 112","full_size":"7X16","full_qty":"28","half_size":"-","half_qty":"-"},"LX6945":{"upgrade_size":"14 x 96","full_size":"7X16","full_qty":"24","half_size":"-","half_qty":"-"},"LX6946":{"upgrade_size":"14 x 96","full_size":"7X16","full_qty":"24","half_size":"-","half_qty":"-"},"LX8350":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX8440":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX8650":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX8750":{"upgrade_size":"9 x 48","full_size":"9X16","full_qty":"6","half_size":"-","half_qty":"-"},"LX8850":{"upgrade_size":"9 x 56","full_size":"9X16","full_qty":"6","half_size":"9x8","half_qty":"2"}},"outdoor_digits":{"LX1020":[{"digit":"11in","qty":5.0},{"digit":"3in BALL","qty":1.0},{"digit":"3in SO","qty":2.0}],"LX1030":[{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"STRIKES","qty":2.0}],"LX1050":[{"digit":"15in","qty":5.0},{"digit":"3in BALL","qty":1.0},{"digit":"3in SO","qty":2.0}],"LX1060":[{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":2.0},{"digit":"STRIKES","qty":2.0}],"LX1062":[{"digit":"18in","qty":2.0}],"LX1064":[{"digit":"18in","qty":4.0}],"LX1070":[{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":2.0},{"digit":"STRIKES","qty":2.0}],"LX1118":[{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":2.0}],"LX1130":[{"digit":"11in","qty":4.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"STRIKES","qty":2.0}],"LX1131":[{"digit":"11in","qty":7.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"STRIKES","qty":2.0}],"LX1132":[{"digit":"11in","qty":6.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":1.0},{"digit":"STRIKES","qty":2.0}],"LX1135":[{"digit":"11in","qty":3.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":1.0},{"digit":"STRIKES","qty":2.0}],"LX1136":[{"digit":"11in","qty":2.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":1.0},{"digit":"STRIKES","qty":2.0}],"LX1138":[{"digit":"11in","qty":4.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"STRIKES","qty":2.0}],"LX1160":[{"digit":"11in","qty":4.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":2.0},{"digit":"STRIKES","qty":2.0}],"LX1161":[{"digit":"11in","qty":7.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":3.0},{"digit":"STRIKES","qty":2.0}],"LX1162":[{"digit":"11in","qty":6.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":3.0},{"digit":"STRIKES","qty":2.0}],"LX1164":[{"digit":"11in","qty":8.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":2.0},{"digit":"STRIKES","qty":2.0}],"LX1165":[{"digit":"11in","qty":3.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":3.0},{"digit":"STRIKES","qty":2.0}],"LX1166":[{"digit":"11in","qty":2.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":3.0},{"digit":"STRIKES","qty":2.0}],"LX1168":[{"digit":"11in","qty":4.0},{"digit":"18in","qty":5.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":2.0},{"digit":"STRIKES","qty":2.0}],"LX1240":[{"digit":"11in","qty":3.0},{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":5.0}],"LX1241":[{"digit":"11in","qty":6.0},{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":5.0},{"digit":"MISC","qty":1.0}],"LX1244":[{"digit":"11in","qty":7.0},{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":5.0}],"LX1250":[{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":8.0},{"digit":"MISC","qty":2.0}],"LX1260":[{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":4.0},{"digit":"24in","qty":4.0},{"digit":"MISC","qty":2.0}],"LX1320":[{"digit":"11in","qty":9.0},{"digit":"3in BALL","qty":1.0},{"digit":"SDOWN","qty":2.0},{"digit":"3in SO","qty":1.0}],"LX1340":[{"digit":"18in","qty":7.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":1.0},{"digit":"STRIKES","qty":2.0}],"LX1341":[{"digit":"18in","qty":8.0},{"digit":"BALLS","qty":1.0},{"digit":"STRIKES","qty":2.0}],"LX1350":[{"digit":"18in","qty":9.0},{"digit":"BALLS","qty":1.0},{"digit":"STRIKES","qty":2.0}],"LX1360":[{"digit":"18in","qty":10.0},{"digit":"DOWN","qty":2.0},{"digit":"MISC","qty":2.0},{"digit":"QTR","qty":2.0}],"LX1370":[{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":10.0},{"digit":"MISC","qty":2.0}],"LX1371":[{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":11.0},{"digit":"MISC","qty":3.0}],"LX1372":[{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":10.0},{"digit":"MISC","qty":3.0}],"LX1373":[{"digit":"18-HALF","qty":2.0},{"digit":"18in","qty":10.0},{"digit":"MISC","qty":2.0}],"LX1374":[{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":12.0},{"digit":"MISC","qty":2.0}],"LX1376":[{"digit":"18-HALF","qty":2.0},{"digit":"18in","qty":10.0},{"digit":"MISC","qty":2.0}],"LX1377":[{"digit":"15in","qty":1.0},{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":8.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1390":[{"digit":"15in","qty":1.0},{"digit":"18in","qty":8.0},{"digit":"BALLS","qty":1.0},{"digit":"MISC","qty":2.0},{"digit":"STRIKES","qty":2.0}],"LX1440":[{"digit":"15in","qty":3.0},{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":11.0}],"LX1480":[{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":11.0},{"digit":"24in","qty":5.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1486":[{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":11.0},{"digit":"24in","qty":5.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1620":[{"digit":"15in","qty":23.0}],"LX1630":[{"digit":"15in","qty":26.0},{"digit":"18in","qty":5.0}],"LX1631":[{"digit":"15in","qty":26.0},{"digit":"18in","qty":6.0},{"digit":"MISC","qty":1.0}],"LX1632":[{"digit":"15in","qty":26.0},{"digit":"18in","qty":5.0},{"digit":"MISC","qty":1.0}],"LX1633":[{"digit":"15in","qty":26.0},{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":5.0}],"LX1634":[{"digit":"15in","qty":26.0},{"digit":"18in","qty":7.0}],"LX1636":[{"digit":"15in","qty":26.0},{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":5.0}],"LX1637":[{"digit":"15in","qty":27.0},{"digit":"18in","qty":3.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1700":[{"digit":"11in","qty":21.0}],"LX1710":[{"digit":"11in","qty":22.0},{"digit":"15in","qty":5.0}],"LX1711":[{"digit":"11in","qty":22.0},{"digit":"15in","qty":6.0},{"digit":"MISC","qty":1.0}],"LX1712":[{"digit":"11in","qty":22.0},{"digit":"15in","qty":5.0},{"digit":"MISC","qty":1.0}],"LX1713":[{"digit":"11in","qty":22.0},{"digit":"15in","qty":5.0}],"LX1714":[{"digit":"11in","qty":22.0},{"digit":"15in","qty":7.0}],"LX1716":[{"digit":"11in","qty":22.0},{"digit":"15in","qty":5.0}],"LX1717":[{"digit":"11in","qty":22.0},{"digit":"15in","qty":4.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1720":[{"digit":"15in","qty":21.0}],"LX1730":[{"digit":"15in","qty":22.0},{"digit":"18in","qty":5.0}],"LX1731":[{"digit":"15in","qty":22.0},{"digit":"18in","qty":6.0},{"digit":"MISC","qty":1.0}],"LX1732":[{"digit":"15in","qty":22.0},{"digit":"18in","qty":5.0},{"digit":"MISC","qty":1.0}],"LX1733":[{"digit":"15in","qty":22.0},{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":5.0}],"LX1734":[{"digit":"15in","qty":22.0},{"digit":"18in","qty":7.0}],"LX1736":[{"digit":"15in","qty":22.0},{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":5.0}],"LX1737":[{"digit":"15in","qty":23.0},{"digit":"18in","qty":3.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1740":[{"digit":"11in","qty":30.0},{"digit":"15in","qty":6.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1741":[{"digit":"11in","qty":30.0},{"digit":"15in","qty":7.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0},{"digit":"MISC","qty":1.0}],"LX1742":[{"digit":"11in","qty":30.0},{"digit":"15in","qty":6.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0},{"digit":"MISC","qty":1.0}],"LX1743":[{"digit":"11in","qty":30.0},{"digit":"15in","qty":6.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1744":[{"digit":"11in","qty":30.0},{"digit":"15in","qty":8.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1746":[{"digit":"11in","qty":30.0},{"digit":"15in","qty":6.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1750":[{"digit":"15in","qty":31.0},{"digit":"18in","qty":5.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1751":[{"digit":"15in","qty":31.0},{"digit":"18in","qty":6.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0},{"digit":"MISC","qty":1.0}],"LX1752":[{"digit":"15in","qty":31.0},{"digit":"18in","qty":5.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0},{"digit":"MISC","qty":1.0}],"LX1753":[{"digit":"15in","qty":31.0},{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":5.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1754":[{"digit":"15in","qty":31.0},{"digit":"18in","qty":7.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1756":[{"digit":"15in","qty":31.0},{"digit":"18-HALF","qty":1.0},{"digit":"18in","qty":5.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1780":[{"digit":"15in","qty":1.0},{"digit":"18in","qty":30.0},{"digit":"24in","qty":5.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1781":[{"digit":"15in","qty":1.0},{"digit":"18in","qty":30.0},{"digit":"24in","qty":6.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0},{"digit":"MISC","qty":1.0}],"LX1782":[{"digit":"15in","qty":1.0},{"digit":"18in","qty":30.0},{"digit":"24in","qty":5.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0},{"digit":"MISC","qty":1.0}],"LX1783":[{"digit":"15in","qty":1.0},{"digit":"18in","qty":30.0},{"digit":"24-HALF","qty":1.0},{"digit":"24in","qty":5.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1784":[{"digit":"15in","qty":1.0},{"digit":"18in","qty":30.0},{"digit":"24in","qty":7.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX1786":[{"digit":"15in","qty":1.0},{"digit":"18in","qty":30.0},{"digit":"24-HALF","qty":1.0},{"digit":"24in","qty":5.0},{"digit":"E","qty":1.0},{"digit":"H","qty":1.0}],"LX3018":[{"digit":"18in","qty":4.0}],"LX3018S":[{"digit":"18in","qty":2.0}],"LX3024":[{"digit":"24in","qty":4.0}],"LX3024S":[{"digit":"24in","qty":2.0}],"LX3030":[{"digit":"30in","qty":4.0}],"LX3030S":[{"digit":"30in","qty":2.0}],"LX3050":[{"digit":"24in","qty":4.0}],"LX3050S":[{"digit":"24in","qty":2.0}],"LX3054":[{"digit":"24in","qty":4.0},{"digit":"15in","qty":4.0}],"LX3070":[{"digit":"30in","qty":4.0}],"LX3070S":[{"digit":"30in","qty":2.0}],"LX3120":[{"digit":"11in","qty":9.0}],"LX3130":[{"digit":"11in","qty":9.0}],"LX3140":[{"digit":"15in","qty":5.0},{"digit":"18in","qty":4.0}],"LX3150":[{"digit":"15in","qty":6.0},{"digit":"18in","qty":4.0},{"digit":"DOWN","qty":2.0},{"digit":"QTR","qty":2.0}],"LX3230":[{"digit":"15in","qty":4.0},{"digit":"18in","qty":8.0}],"LX3250":[{"digit":"18in","qty":12.0}],"LX3320":[{"digit":"15in","qty":6.0},{"digit":"18in","qty":8.0},{"digit":"SM_POSS","qty":2.0}],"LX3325":[{"digit":"15in","qty":6.0},{"digit":"18in","qty":9.0},{"digit":"SM_POSS","qty":2.0}],"LX3340":[{"digit":"24in","qty":14.0},{"digit":"SM_POSS","qty":2.0}],"LX3360":[{"digit":"24in","qty":14.0},{"digit":"MED_POSS","qty":2.0}],"LX3365":[{"digit":"24in","qty":15.0},{"digit":"MED_POSS","qty":2.0}],"LX3450":[{"digit":"18in","qty":12.0}],"LX3620":[{"digit":"11in","qty":2.0},{"digit":"15in","qty":6.0},{"digit":"18in","qty":8.0},{"digit":"SM_POSS","qty":2.0}],"LX3625":[{"digit":"11in","qty":2.0},{"digit":"15in","qty":6.0},{"digit":"18in","qty":9.0},{"digit":"SM_POSS","qty":2.0}],"LX3630":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":14.0},{"digit":"MED_POSS","qty":2.0}],"LX3640":[{"digit":"15in","qty":2.0},{"digit":"24in","qty":14.0},{"digit":"MED_POSS","qty":2.0}],"LX3645":[{"digit":"15in","qty":2.0},{"digit":"24in","qty":15.0},{"digit":"MED_POSS","qty":2.0}],"LX3650":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":10.0},{"digit":"30in","qty":4.0},{"digit":"MED_POSS","qty":2.0}],"LX3655":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":10.0},{"digit":"30in","qty":5.0},{"digit":"MED_POSS","qty":2.0}],"LX3680":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":14.0},{"digit":"MED_POSS","qty":2.0}],"LX3685":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":15.0},{"digit":"MED_POSS","qty":2.0}],"LX3690":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":10.0},{"digit":"30in","qty":4.0},{"digit":"MED_POSS","qty":2.0}],"LX3695":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":10.0},{"digit":"30in","qty":5.0},{"digit":"MED_POSS","qty":2.0}],"LX3740":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":6.0},{"digit":"30in","qty":8.0},{"digit":"MED_POSS","qty":2.0}],"LX3745":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":6.0},{"digit":"30in","qty":9.0},{"digit":"MED_POSS","qty":2.0}],"LX3780":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":6.0},{"digit":"30in","qty":8.0},{"digit":"MED_POSS","qty":2.0}],"LX3785":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":6.0},{"digit":"30in","qty":9.0},{"digit":"MED_POSS","qty":2.0}],"LX3840":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":6.0},{"digit":"30in","qty":8.0},{"digit":"MED_POSS","qty":2.0}],"LX3845":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":6.0},{"digit":"30in","qty":9.0},{"digit":"MED_POSS","qty":2.0}],"LX3880":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":6.0},{"digit":"30in","qty":8.0},{"digit":"MED_POSS","qty":2.0}],"LX3885":[{"digit":"18in","qty":2.0},{"digit":"24in","qty":6.0},{"digit":"30in","qty":9.0},{"digit":"MED_POSS","qty":2.0}],"LX6320":[{"digit":"11in","qty":9.0}],"LX6324":[{"digit":"11in","qty":9.0}],"LX6360":[{"digit":"18in","qty":1.0},{"digit":"24in","qty":8.0}],"LX6370":[{"digit":"30in","qty":4.0},{"digit":"24in","qty":5.0}],"LX6430":[{"digit":"15in","qty":5.0},{"digit":"18in","qty":8.0}],"LX6434":[{"digit":"15in","qty":5.0},{"digit":"18in","qty":8.0}],"LX6435":[{"digit":"15in","qty":5.0},{"digit":"18in","qty":9.0}],"LX6436":[{"digit":"15in","qty":5.0},{"digit":"18in","qty":9.0}],"LX6540":[{"digit":"18in","qty":9.0},{"digit":"24in","qty":8.0}],"LX6544":[{"digit":"18in","qty":9.0},{"digit":"24in","qty":8.0}],"LX6545":[{"digit":"18in","qty":9.0},{"digit":"24in","qty":9.0}],"LX6546":[{"digit":"18in","qty":9.0},{"digit":"24in","qty":9.0}],"LX6630":[{"digit":"11in","qty":9.0}],"LX6650":[{"digit":"15in","qty":5.0},{"digit":"18in","qty":4.0}],"LX6655":[{"digit":"15in","qty":5.0},{"digit":"18in","qty":5.0}],"LX6740":[{"digit":"18in","qty":13.0},{"digit":"24in","qty":8.0}],"LX6744":[{"digit":"18in","qty":13.0},{"digit":"24in","qty":8.0}],"LX6745":[{"digit":"18in","qty":13.0},{"digit":"24in","qty":9.0}],"LX6746":[{"digit":"18in","qty":13.0},{"digit":"24in","qty":9.0}],"LX6940":[{"digit":"15in","qty":2.0},{"digit":"18in","qty":13.0},{"digit":"24in","qty":8.0},{"digit":"MED_POSS","qty":2.0}],"LX6944":[{"digit":"15in","qty":2.0},{"digit":"18in","qty":13.0},{"digit":"24in","qty":8.0},{"digit":"MED_POSS","qty":2.0}],"LX6945":[{"digit":"15in","qty":2.0},{"digit":"18in","qty":13.0},{"digit":"24in","qty":9.0},{"digit":"MED_POSS","qty":2.0}],"LX6946":[{"digit":"15in","qty":2.0},{"digit":"18in","qty":13.0},{"digit":"24in","qty":9.0},{"digit":"MED_POSS","qty":2.0}],"LX7230":[{"digit":"11in","qty":9.0},{"digit":"11-HALF","qty":2.0},{"digit":"2B BONUS","qty":2.0},{"digit":"1B POSS","qty":2.0}],"LX7250":[{"digit":"11in","qty":9.0},{"digit":"MISC","qty":4.0}],"LX7260":[{"digit":"11in","qty":14.0},{"digit":"11-HALF","qty":4.0},{"digit":"2B BONUS","qty":2.0},{"digit":"1B POSS","qty":2.0}],"LX7520":[{"digit":"11in","qty":6.0}],"LX7620":[{"digit":"11in","qty":8.0}],"LX7640":[{"digit":"18in","qty":8.0},{"digit":"MISC","qty":1.0}],"LX7740":[{"digit":"15in","qty":21.0},{"digit":"18in","qty":8.0}],"LX7770":[{"digit":"18in","qty":21.0},{"digit":"24in","qty":8.0}],"LX7860":[{"digit":"11in","qty":21.0}]},"indoor_digits":{"LX2055":[{"digit":"6F-R","qty":20.0},{"digit":"6F-A","qty":20.0},{"digit":"6F-G","qty":10.0}],"LX2056":[{"digit":"6F-R","qty":24.0},{"digit":"6F-A","qty":24.0},{"digit":"6F-G","qty":24.0}],"LX2106":[{"digit":"6F-R","qty":4.0}],"LX2120S":[{"digit":"12F-R","qty":2.0},{"digit":"4MISC-R","qty":1.0}],"LX2120":[{"digit":"12F-R","qty":4.0},{"digit":"4MISC-R","qty":2.0}],"LX2150":[{"digit":"12F-R","qty":4.0}],"LX2150S":[{"digit":"12F-R","qty":2.0}],"LX2158":[{"digit":"12F-R","qty":4.0}],"LX2158S":[{"digit":"12F-R","qty":2.0}],"LX2160":[{"digit":"4MISC-R","qty":2.0},{"digit":"12F-R","qty":4.0}],"LX2160S":[{"digit":"4MISC-R","qty":1.0},{"digit":"12F-R","qty":2.0}],"LX2170":[{"digit":"12F-R","qty":4.0},{"digit":"6F-G","qty":8.0}],"LX2170S":[{"digit":"12F-R","qty":2.0},{"digit":"6F-G","qty":4.0}],"LX2180":[{"digit":"6F-G","qty":8.0},{"digit":"12F-R","qty":4.0},{"digit":"4MISC-R","qty":4.0}],"LX2180S":[{"digit":"6F-G","qty":4.0},{"digit":"4MISC-R","qty":2.0},{"digit":"12F-R","qty":2.0}],"LX2330":[{"digit":"9F-R","qty":4.0},{"digit":"6F-G","qty":4.0},{"digit":"9R COL/DEC","qty":1.0},{"digit":"9F-A","qty":4.0},{"digit":"9H-A","qty":2.0},{"digit":"6F-G","qty":1.0},{"digit":"POSS","qty":2.0},{"digit":"BONUS","qty":4.0}],"LX2340":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-G","qty":1.0},{"digit":"POSS","qty":2.0},{"digit":"BONUS","qty":4.0}],"LX2350":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-G","qty":1.0},{"digit":"POSS","qty":2.0},{"digit":"BONUS","qty":2.0}],"LX2370":[{"digit":"16F-R","qty":4.0},{"digit":"16R COL/DEC","qty":1.0},{"digit":"16F-A","qty":4.0},{"digit":"16H-A","qty":2.0},{"digit":"12F-G","qty":1.0},{"digit":"5R-POSS","qty":2.0},{"digit":"5G-BONUS","qty":4.0}],"LX2545":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-R","qty":4.0},{"digit":"9F-A","qty":2.0},{"digit":"9F-G","qty":2.0},{"digit":"9H-A","qty":2.0},{"digit":"POSS","qty":2.0},{"digit":"BONUS","qty":4.0}],"LX2550":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-R","qty":2.0},{"digit":"9F-A","qty":2.0},{"digit":"9F-G","qty":1.0},{"digit":"9H-A","qty":2.0},{"digit":"POSS","qty":2.0},{"digit":"BONUS","qty":4.0}],"LX2555":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-R","qty":2.0},{"digit":"9F-A","qty":2.0},{"digit":"9F-G","qty":1.0},{"digit":"9H-A","qty":2.0},{"digit":"POSS","qty":2.0},{"digit":"BONUS","qty":4.0},{"digit":"6F-R","qty":20.0},{"digit":"6F-A","qty":20.0},{"digit":"6F-G","qty":10.0}],"LX2556":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-R","qty":2.0},{"digit":"9F-A","qty":2.0},{"digit":"9F-G","qty":1.0},{"digit":"9H-A","qty":2.0},{"digit":"POSS","qty":2.0},{"digit":"BONUS","qty":4.0},{"digit":"6F-R","qty":24.0},{"digit":"6F-A","qty":24.0},{"digit":"6F-G","qty":24.0}],"LX2570":[{"digit":"16F-R","qty":4.0},{"digit":"16R COL/DEC","qty":1.0},{"digit":"16F-A","qty":4.0},{"digit":"16H-A","qty":2.0},{"digit":"12F-G","qty":1.0},{"digit":"5R-POSS","qty":2.0},{"digit":"5G-BONUS","qty":4.0},{"digit":"12F-R","qty":2.0},{"digit":"12F-A","qty":2.0},{"digit":"12H-A","qty":2.0}],"LX2575":[{"digit":"16F-R","qty":4.0},{"digit":"16R COL/DEC","qty":1.0},{"digit":"16F-A","qty":4.0},{"digit":"16H-A","qty":2.0},{"digit":"12F-G","qty":1.0},{"digit":"5R-POSS","qty":2.0},{"digit":"5G-BONUS","qty":4.0},{"digit":"12F-R","qty":2.0},{"digit":"12F-A","qty":2.0},{"digit":"12H-A","qty":2.0},{"digit":"6F-R","qty":20.0},{"digit":"6F-A","qty":20.0},{"digit":"6F-G","qty":10.0}],"LX2576":[{"digit":"16F-R","qty":4.0},{"digit":"16R COL/DEC","qty":1.0},{"digit":"16F-A","qty":4.0},{"digit":"16H-A","qty":2.0},{"digit":"12F-G","qty":1.0},{"digit":"5R-POSS","qty":2.0},{"digit":"5G-BONUS","qty":4.0},{"digit":"12F-R","qty":2.0},{"digit":"12F-A","qty":2.0},{"digit":"12H-A","qty":2.0},{"digit":"6F-R","qty":24.0},{"digit":"6F-A","qty":24.0},{"digit":"6F-G","qty":24.0}],"LX2645":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-G","qty":4.0},{"digit":"9F-A","qty":2.0},{"digit":"9H-A","qty":2.0},{"digit":"POSS","qty":2.0},{"digit":"BONUS","qty":4.0}],"LX2655":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-G","qty":4.0},{"digit":"9F-A","qty":2.0},{"digit":"9H-A","qty":2.0},{"digit":"POSS","qty":2.0},{"digit":"BONUS","qty":4.0}],"LX2655-4":[{"digit":"12F-R","qty":16.0},{"digit":"COL/DEC","qty":4.0},{"digit":"12F-A","qty":16.0},{"digit":"12H-A","qty":8.0},{"digit":"9F-G","qty":16.0},{"digit":"9F-A","qty":8.0},{"digit":"9H-A","qty":8.0},{"digit":"POSS","qty":8.0},{"digit":"BONUS","qty":16.0}],"LX2665":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-G","qty":4.0},{"digit":"9F-R","qty":2.0},{"digit":"9F-A","qty":2.0},{"digit":"9H-A","qty":2.0},{"digit":"POSS","qty":2.0},{"digit":"BONUS","qty":4.0}],"LX2665-4":[{"digit":"12F-R","qty":16.0},{"digit":"COL/DEC","qty":4.0},{"digit":"12F-A","qty":16.0},{"digit":"12H-A","qty":8.0},{"digit":"9F-G","qty":8.0},{"digit":"9F-R","qty":8.0},{"digit":"9F-A","qty":8.0},{"digit":"9H-A","qty":8.0},{"digit":"POSS","qty":8.0},{"digit":"BONUS","qty":16.0}],"LX2745":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-R","qty":4.0},{"digit":"9F-A","qty":2.0},{"digit":"9F-G","qty":2.0},{"digit":"9H-A","qty":2.0},{"digit":"POSS","qty":2.0},{"digit":"BONUS","qty":4.0}],"LX2770":[{"digit":"16F-R","qty":4.0},{"digit":"16R COL/DEC","qty":1.0},{"digit":"16F-A","qty":4.0},{"digit":"16H-A","qty":2.0},{"digit":"12F-G","qty":4.0},{"digit":"5R-POSS","qty":2.0},{"digit":"5G-BONUS","qty":4.0},{"digit":"12F-R","qty":2.0},{"digit":"12F-A","qty":2.0},{"digit":"12H-A","qty":2.0}],"LX7406":[{"digit":"6F-R","qty":4.0}],"LX8350":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-G","qty":1.0}],"LX8440":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-G","qty":13.0},{"digit":"9F-R","qty":8.0},{"digit":"9G COL/DEC","qty":4.0}],"LX8650":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-G","qty":13.0},{"digit":"9G COL/DEC","qty":4.0}],"LX8750":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-G","qty":13.0},{"digit":"9G COL/DEC","qty":4.0},{"digit":"9F-A","qty":4.0}],"LX8850":[{"digit":"12F-R","qty":4.0},{"digit":"COL/DEC","qty":1.0},{"digit":"12F-A","qty":4.0},{"digit":"12H-A","qty":2.0},{"digit":"9F-G","qty":13.0},{"digit":"9G COL/DEC","qty":4.0},{"digit":"9F-A","qty":4.0},{"digit":"9F-R","qty":8.0}]},"handmade_outdoor":["LX1020","LX1050","LX1070","LX1118","LX1240","LX1241","LX1244","LX1250","LX1260","LX1320","LX1360","LX1370","LX1371","LX1372","LX1373","LX1374","LX1376","LX1377","LX1440","LX1480","LX1486","LX1633","LX1636","LX1733","LX1736","LX1753","LX1756","LX1783","LX1786","LX3150","LX3320","LX3325","LX3340","LX3620","LX3625","LX7230","LX7260"],"handmade_indoor":["LX2330","LX2370","LX2570","LX2575","LX2576","LX2770","LX8440","LX8650","LX8750","LX8850"],"handmade_outdoor_digits":{"LX1020":[{"digit":"3in BALL","qty":1},{"digit":"3in SO","qty":2}],"LX1050":[{"digit":"3in BALL","qty":1},{"digit":"3in SO","qty":2}],"LX1070":[{"digit":"18-HALF","qty":1}],"LX1118":[{"digit":"18-HALF","qty":1}],"LX1240":[{"digit":"18-HALF","qty":1}],"LX1241":[{"digit":"18-HALF","qty":1}],"LX1244":[{"digit":"18-HALF","qty":1}],"LX1250":[{"digit":"18-HALF","qty":1}],"LX1260":[{"digit":"18-HALF","qty":1}],"LX1320":[{"digit":"3in BALL","qty":1},{"digit":"SDOWN","qty":2},{"digit":"3in SO","qty":1}],"LX1360":[{"digit":"DOWN","qty":2},{"digit":"QTR","qty":2}],"LX1370":[{"digit":"18-HALF","qty":1}],"LX1371":[{"digit":"18-HALF","qty":1}],"LX1372":[{"digit":"18-HALF","qty":1}],"LX1373":[{"digit":"18-HALF","qty":2}],"LX1374":[{"digit":"18-HALF","qty":1}],"LX1376":[{"digit":"18-HALF","qty":2}],"LX1377":[{"digit":"18-HALF","qty":1}],"LX1440":[{"digit":"18-HALF","qty":1}],"LX1480":[{"digit":"18-HALF","qty":1}],"LX1486":[{"digit":"18-HALF","qty":1}],"LX1633":[{"digit":"18-HALF","qty":1}],"LX1636":[{"digit":"18-HALF","qty":1}],"LX1733":[{"digit":"18-HALF","qty":1}],"LX1736":[{"digit":"18-HALF","qty":1}],"LX1753":[{"digit":"18-HALF","qty":1}],"LX1756":[{"digit":"18-HALF","qty":1}],"LX1783":[{"digit":"24-HALF","qty":1}],"LX1786":[{"digit":"24-HALF","qty":1}],"LX3150":[{"digit":"DOWN","qty":2},{"digit":"QTR","qty":2}],"LX3320":[{"digit":"SM_POSS","qty":2}],"LX3325":[{"digit":"SM_POSS","qty":2}],"LX3340":[{"digit":"SM_POSS","qty":2}],"LX3620":[{"digit":"SM_POSS","qty":2}],"LX3625":[{"digit":"SM_POSS","qty":2}],"LX7230":[{"digit":"11-HALF","qty":2},{"digit":"2B BONUS","qty":2},{"digit":"1B POSS","qty":2}],"LX7260":[{"digit":"11-HALF","qty":4},{"digit":"2B BONUS","qty":2},{"digit":"1B POSS","qty":2}]},"handmade_indoor_digits":{"LX2330":[{"digit":"9R COL/DEC","qty":1}],"LX2370":[{"digit":"16F-R","qty":4},{"digit":"16R COL/DEC","qty":1},{"digit":"16F-A","qty":4},{"digit":"16H-A","qty":2},{"digit":"12F-G","qty":1},{"digit":"5R-POSS","qty":2},{"digit":"5G-BONUS","qty":4}],"LX2570":[{"digit":"16F-R","qty":4},{"digit":"16R COL/DEC","qty":1},{"digit":"16F-A","qty":4},{"digit":"16H-A","qty":2},{"digit":"12F-G","qty":1},{"digit":"5R-POSS","qty":2},{"digit":"5G-BONUS","qty":4}],"LX2575":[{"digit":"16F-R","qty":4},{"digit":"16R COL/DEC","qty":1},{"digit":"16F-A","qty":4},{"digit":"16H-A","qty":2},{"digit":"12F-G","qty":1},{"digit":"5R-POSS","qty":2},{"digit":"5G-BONUS","qty":4}],"LX2576":[{"digit":"16F-R","qty":4},{"digit":"16R COL/DEC","qty":1},{"digit":"16F-A","qty":4},{"digit":"16H-A","qty":2},{"digit":"12F-G","qty":1},{"digit":"5R-POSS","qty":2},{"digit":"5G-BONUS","qty":4}],"LX2770":[{"digit":"16F-R","qty":4},{"digit":"16R COL/DEC","qty":1},{"digit":"16F-A","qty":4},{"digit":"16H-A","qty":2},{"digit":"12F-G","qty":4},{"digit":"5R-POSS","qty":2},{"digit":"5G-BONUS","qty":4}],"LX8440":[{"digit":"9G COL/DEC","qty":4}],"LX8650":[{"digit":"9G COL/DEC","qty":4}],"LX8750":[{"digit":"9G COL/DEC","qty":4}],"LX8850":[{"digit":"9G COL/DEC","qty":4}]},"custom_outdoor_standard":["11in","15in","18in","24in","30in","BALLS","E","H","MED_POSS","MISC","STRIKES"],"custom_outdoor_handmade":["SM_POSS","11-HALF","15-HALF","18-HALF","24-HALF","3in BALL","3in SO","DOWN","QTR","2B BONUS","1B POSS","SDOWN"],"custom_indoor_standard":["12F-A","12F-R","12H-A","4MISC-R","6F-A","6F-G","6F-R","9F-A","9F-G","9F-R","9H-A","BONUS","COL/DEC","POSS"],"custom_indoor_handmade":["12F-G","5R-POSS","5G-BONUS","16F-R","16F-A","16H-A","16R COL/DEC","12Y COL/DEC","9R COL/DEC","9G COL/DEC","9Y COL/DEC","3G 2BULLETBONUS"],"custom_etn_sizes":["14X16","14X8","7X16","7X8","9X16","9X8"]}
+;
 
 // ── WEEK LABEL ────────────────────────────────────────────────────────────────
 function updateWeekLabel() {
@@ -661,16 +502,15 @@ function parseManualInput() {
   let added = 0, skipped = 0;
 
   lines.forEach(line => {
-    // Format: DATE, ORDER, QTY, MODEL, COLOR, ETN, ETN_SIZE
+    // Remove optional leading order: prefix
     const parts = line.split(',').map(p => p.trim());
-    if (parts.length < 4) { skipped++; return; }
-    const date   = parts[0].toUpperCase();
-    const order  = parts[1].replace(/^order[:\s]*/i,'').trim();
-    const qty    = parseInt(parts[2]) || 1;
-    const model  = parts[3].toUpperCase();
-    const color  = (parts[4] || '').toUpperCase();
-    const etnRaw = (parts[5] || '').toUpperCase();
-    const etnSize = (parts[6] || '').toUpperCase();
+    if (parts.length < 3) { skipped++; return; }
+    const order  = parts[0].replace(/^order[:\s]*/i,'').trim();
+    const qty    = parseInt(parts[1]) || 1;
+    const model  = parts[2].toUpperCase();
+    const color  = (parts[3] || '').toUpperCase();
+    const etnRaw = (parts[4] || '').toUpperCase();
+    const etnSize = (parts[5] || '').toUpperCase();
     const etn    = etnRaw === 'TRUE' || etnRaw === '1';
 
     if (!order || !model) { skipped++; return; }
@@ -679,7 +519,7 @@ function parseManualInput() {
     if (orders.find(o => o.order === order && o.model === model && o.qty === qty)) {
       skipped++; return;
     }
-    orders.push({ date, order, qty, model, color, etn, etnSize, id: order + '_' + model + '_' + Date.now() });
+    orders.push({ order, qty, model, color, etn, etnSize, id: order + '_' + model + '_' + Date.now() });
     added++;
   });
 
@@ -896,11 +736,9 @@ function renderCustomPicker(o) {
   const standard = ind ? DB.custom_indoor_standard : DB.custom_outdoor_standard;
   const handmade = ind ? DB.custom_indoor_handmade : DB.custom_outdoor_handmade;
   const key = o.order + '_' + o.model;
-  const safeKey = key.replace(/[^a-zA-Z0-9]/g,'_');
-  const saved = customData[key] || { digits: [], etn: {} };
+  const saved = customData[key] || { digits: [] };
   const savedMap = {};
   (saved.digits || []).forEach(d => { savedMap[d.desc] = d.qty; });
-  const savedEtn = saved.etn || {};
 
   const makeRow = (desc, sectionKey) => {
     const safeId = desc.replace(/[^a-zA-Z0-9]/g,'_');
@@ -930,61 +768,22 @@ function renderCustomPicker(o) {
       <div class="picker-grid">${s.items.map(d => makeRow(d, s.key)).join('')}</div>
     </div>`).join('');
 
-  // ETN section — only shown when order has ETN = true
-  const etnSectionHtml = o.etn ? `
-    <div class="picker-group">
-      <div class="picker-section-label" style="color:var(--blue)">ETN UPGRADE</div>
-      <div style="padding:10px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-        <div>
-          <div style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;margin-bottom:4px">PANEL SIZE</div>
-          <input type="text" class="picker-qty-input" id="etn_size_${safeKey}"
-            placeholder="e.g. 9X56" value="${savedEtn.size || o.etnSize || ''}"
-            style="width:100%;text-align:left;text-transform:uppercase"
-            oninput="onEtnChange('${key}')">
-        </div>
-        <div>
-          <div style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;margin-bottom:4px">FULL ETN QTY</div>
-          <input type="number" class="picker-qty-input" id="etn_full_qty_${safeKey}"
-            placeholder="0" min="0" value="${savedEtn.full_qty || ''}"
-            style="width:100%"
-            oninput="onEtnChange('${key}')">
-        </div>
-        <div>
-          <div style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;margin-bottom:4px">HALF ETN QTY</div>
-          <input type="number" class="picker-qty-input" id="etn_half_qty_${safeKey}"
-            placeholder="0" min="0" value="${savedEtn.half_qty || ''}"
-            style="width:100%"
-            oninput="onEtnChange('${key}')">
-        </div>
-      </div>
-    </div>` : '';
-
   const footerHtml = renderPickerSummary(o);
 
-  return `<div class="custom-picker" id="picker_${safeKey}">
+  return `<div class="custom-picker" id="picker_${key.replace(/[^a-zA-Z0-9]/g,'_')}">
     <div class="custom-picker-header">
       <div>
         <span class="custom-picker-title">${ind ? 'INDOOR' : 'OUTDOOR'} CUSTOM — Select Digits</span>
-        <span class="custom-picker-sub">Order #${o.order} · ${o.model} · ×${o.qty}${o.etn ? ' · <span style="color:var(--blue)">ETN</span>' : ''}</span>
+        <span class="custom-picker-sub">Order #${o.order} · ${o.model} · ×${o.qty}</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         <button class="btn btn-danger btn-sm" onclick="clearCustomDigits('${key}')">Clear</button>
         <button class="btn btn-primary btn-sm" onclick="saveCustomDigits('${key}')">✓ Save</button>
       </div>
     </div>
-    ${etnSectionHtml}
     ${sectionHtml}
-    <div class="picker-footer" id="pfooter_${safeKey}">${footerHtml}</div>
+    <div class="picker-footer" id="pfooter_${key.replace(/[^a-zA-Z0-9]/g,'_')}">${footerHtml}</div>
   </div>`;
-}
-
-function onEtnChange(key) {
-  const safeKey = key.replace(/[^a-zA-Z0-9]/g,'_');
-  const size     = (document.getElementById('etn_size_' + safeKey)?.value || '').toUpperCase().trim();
-  const fullQty  = parseInt(document.getElementById('etn_full_qty_' + safeKey)?.value) || 0;
-  const halfQty  = parseInt(document.getElementById('etn_half_qty_' + safeKey)?.value) || 0;
-  if (!customData[key]) customData[key] = { digits: [], etn: {} };
-  customData[key].etn = { size, full_qty: fullQty, half_qty: halfQty };
 }
 
 function onPickerChange(input) {
@@ -1030,19 +829,8 @@ function saveCustomDigits(key) {
   const safeKey = key.replace(/[^a-zA-Z0-9]/g,'_');
   const inputs = document.querySelectorAll(`#picker_${safeKey} .picker-qty-input`);
   const digits = [];
-  inputs.forEach(inp => {
-    if (!inp.dataset.desc) return; // skip ETN inputs (no data-desc)
-    const q = parseInt(inp.value)||0;
-    if (q > 0) digits.push({desc: inp.dataset.desc, qty: q});
-  });
-  // Preserve ETN data if already set via onEtnChange
-  const existingEtn = customData[key]?.etn || {};
-  // Also read ETN fields directly in case save clicked without blur
-  const size    = (document.getElementById('etn_size_' + safeKey)?.value || '').toUpperCase().trim();
-  const fullQty = parseInt(document.getElementById('etn_full_qty_' + safeKey)?.value) || 0;
-  const halfQty = parseInt(document.getElementById('etn_half_qty_' + safeKey)?.value) || 0;
-  const etn = o.etn ? { size: size || existingEtn.size, full_qty: fullQty || existingEtn.full_qty, half_qty: halfQty || existingEtn.half_qty } : {};
-  customData[key] = { digits, etn };
+  inputs.forEach(inp => { const q=parseInt(inp.value)||0; if(q>0) digits.push({desc:inp.dataset.desc,qty:q}); });
+  customData[key] = { digits };
   const btn = document.querySelector(`#picker_${safeKey} .btn-primary`);
   if (btn) { btn.textContent = '✓ Saved!'; setTimeout(()=>btn.textContent='✓ Save',1500); }
   renderFlagsPanel();
@@ -1054,13 +842,6 @@ function clearCustomDigits(key) {
   document.querySelectorAll(`#picker_${safeKey} .picker-qty-input`).forEach(i=>i.value='');
   document.querySelectorAll(`#picker_${safeKey} .picker-row`).forEach(r=>r.classList.remove('picker-row-active'));
   document.querySelectorAll(`#picker_${safeKey} .picker-total`).forEach(t=>t.innerHTML='');
-  // Clear ETN fields
-  const etnSize = document.getElementById('etn_size_' + safeKey);
-  const etnFull = document.getElementById('etn_full_qty_' + safeKey);
-  const etnHalf = document.getElementById('etn_half_qty_' + safeKey);
-  if (etnSize) etnSize.value = '';
-  if (etnFull) etnFull.value = '';
-  if (etnHalf) etnHalf.value = '';
   const footer = document.getElementById(`pfooter_${safeKey}`);
   if (footer) footer.innerHTML = '<span style="color:var(--muted);font-size:0.78rem">No digits selected yet</span>';
   renderOrderList();
@@ -1115,7 +896,6 @@ function renderLineListing() {
   const colorRank = { 'AMBER': 0, 'RED': 1, '': 2 };
 
   const cmp = {
-    date:  (a,b) => (a.date||'').localeCompare(b.date||'') * dir,
     order: (a,b) => a.order.localeCompare(b.order) * dir,
     qty:   (a,b) => (a.qty - b.qty) * dir,
     model: (a,b) => a.model.localeCompare(b.model) * dir,
@@ -1128,8 +908,8 @@ function renderLineListing() {
     // Default grouped view: Outdoor section then Indoor section, each by order #
     const out = rows.filter(r => !r.indoor).sort((a,b)=>a.order.localeCompare(b.order));
     const ind = rows.filter(r =>  r.indoor).sort((a,b)=>a.order.localeCompare(b.order));
-    if (out.length) body += '<tr class="tl-section-row"><td colspan="6">Outdoor</td></tr>' + out.map(lineRowHtml).join('');
-    if (ind.length) body += '<tr class="tl-section-row"><td colspan="6">Indoor</td></tr>'  + ind.map(lineRowHtml).join('');
+    if (out.length) body += '<tr class="tl-section-row"><td colspan="5">Outdoor</td></tr>' + out.map(lineRowHtml).join('');
+    if (ind.length) body += '<tr class="tl-section-row"><td colspan="5">Indoor</td></tr>'  + ind.map(lineRowHtml).join('');
   } else {
     rows.sort(cmp[lineSort.key]);
     body = rows.map(lineRowHtml).join('');
@@ -1139,20 +919,18 @@ function renderLineListing() {
   const groupActive = lineSort.key === 'group' ? ' th-active' : '';
   return `<div class="tl-card" id="lineListingWrap"><table class="tl-table">
     <thead><tr>
-      <th class="th-sort${lineSort.key==='date'?' th-active':''}" onclick="sortLineListing('date')">Date${arrow('date')}</th>
       <th class="th-sort${lineSort.key==='order'?' th-active':''}" onclick="sortLineListing('order')">Order${arrow('order')}</th>
       <th class="th-sort${lineSort.key==='qty'?' th-active':''}" onclick="sortLineListing('qty')">Qty${arrow('qty')}</th>
       <th class="th-sort${lineSort.key==='model'?' th-active':''}" onclick="sortLineListing('model')">Model${arrow('model')}</th>
       <th class="th-sort${lineSort.key==='color'?' th-active':''}" onclick="sortLineListing('color')">Color${arrow('color')}</th>
       <th class="th-sort${lineSort.key==='etn'?' th-active':''}" onclick="sortLineListing('etn')">ETN Size${arrow('etn')}</th>
     </tr>
-    <tr class="th-grouprow"><td colspan="6"><button class="group-toggle${groupActive}" onclick="sortLineListing('group')">⊞ Group by Outdoor / Indoor</button></td></tr>
+    <tr class="th-grouprow"><td colspan="5"><button class="group-toggle${groupActive}" onclick="sortLineListing('group')">⊞ Group by Outdoor / Indoor</button></td></tr>
     </thead><tbody>${body}</tbody></table></div>`;
 }
 
 function lineRowHtml(o) {
   return `<tr>
-    <td class="mono" style="color:var(--muted);font-size:0.75rem">${o.date || '—'}</td>
     <td class="mono">${o.order}</td>
     <td class="mono">×${o.qty}</td>
     <td><strong>${o.model}</strong>${o.custom?' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>':''}</td>
@@ -1198,7 +976,7 @@ function renderSummary() {
   // ── Order line listing (sortable) ──
   // Store all rows globally so header clicks can re-sort without recomputing the report
   lineListingRows = orders.map(o => ({
-    date: o.date || '', order: o.order, qty: o.qty, model: o.model, color: o.color,
+    order: o.order, qty: o.qty, model: o.model, color: o.color,
     etn: o.etn, etnSize: o.etnSize,
     indoor: isIndoor(o.model), custom: isCustom(o.model)
   }));
@@ -1215,20 +993,14 @@ function renderSummary() {
   if (etnOrders.length) {
     const etnRow = o => {
       const e = getETN(o.model) || {};
-      const cd = isCustom(o.model) ? (customData[o.order+'_'+o.model]?.etn || {}) : {};
-      const panelSize = cd.size || o.etnSize || e.upgrade_size || '—';
-      const fullSize  = e.full_size || '—';
-      const fullQty   = cd.full_qty || e.full_qty || '—';
-      const halfSize  = e.half_size && e.half_size !== '-' && e.half_size !== '' ? e.half_size : '—';
-      const halfQty   = cd.half_qty || (halfSize !== '—' ? e.half_qty : '—');
-      const half = halfSize !== '—' ? `${halfSize} × ${halfQty}` : '—';
+      const half = (e.half_size && e.half_size !== '-' && e.half_size !== '') ? `${e.half_size} × ${e.half_qty}` : '—';
       return `<tr>
         <td class="mono">${o.order}</td>
         <td class="mono">×${o.qty}</td>
-        <td><strong>${o.model}</strong>${isCustom(o.model) ? ' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>' : ''}</td>
+        <td><strong>${o.model}</strong></td>
         <td>${colorTag(o)}</td>
-        <td class="mono">${panelSize}</td>
-        <td class="mono">${fullSize} × ${fullQty}</td>
+        <td class="mono">${o.etnSize || e.upgrade_size || '—'}</td>
+        <td class="mono">${e.full_size || '—'} × ${e.full_qty || '—'}</td>
         <td class="mono">${half}</td>
       </tr>`;
     };
@@ -1311,9 +1083,6 @@ function renderHandmade() {
     ${outdoorCards.length ? `<div class="hm-section-title" style="color:var(--amber)">Outdoor</div>${outdoorCards.map(makeCard).join('')}` : ''}
     ${indoorCards.length  ? `<div class="hm-section-title" style="color:var(--blue)">Indoor</div>${indoorCards.map(makeCard).join('')}` : ''}`;
 }
-
-// ── INIT ──────────────────────────────────────────────────────────────────────
-loadAllData();
 </script>
 </body>
 </html>
