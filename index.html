@@ -777,13 +777,10 @@ function renderCustomPicker(o) {
       <div class="picker-section-label" style="color:var(--blue)">ETN UPGRADE</div>
       <div style="padding:10px 16px;display:flex;align-items:center;gap:12px;">
         <div class="picker-name" style="color:var(--blue)">Panel Size</div>
-        <select id="etn_size_${key.replace(/[^a-zA-Z0-9]/g,'_')}"
-          style="background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:4px 8px;font-family:'IBM Plex Mono',monospace;font-size:0.82rem;"
-          onchange="onEtnSizeChange(this,'${key}')">
-          <option value="">— select size —</option>
-          ${DB.custom_etn_sizes.map(s => `<option value="${s}"${s===savedEtnSize?' selected':''}>${s}</option>`).join('')}
-        </select>
-        ${savedEtnSize ? `<span class="qty-pill" style="background:rgba(59,130,246,0.12);color:var(--blue)">${savedEtnSize}</span>` : ''}
+        <input type="text" id="etn_size_${key.replace(/[^a-zA-Z0-9]/g,'_')}"
+          class="picker-qty-input" style="width:100px;text-align:left;text-transform:uppercase;"
+          placeholder="e.g. 9X48" value="${savedEtnSize}"
+          oninput="onEtnSizeChange(this,'${key}')">
       </div>
     </div>` : '';
 
