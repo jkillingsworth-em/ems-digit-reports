@@ -1095,7 +1095,7 @@ function renderSummary() {
 function renderHandmade() {
   const hmOrders = orders.filter(o => {
     if (isCustom(o.model)) return false;
-    return !!(hmOutdoorDigits[o.model] || hmIndoorDigits[o.model]);
+    return hmOutdoor.has(o.model) || hmIndoor.has(o.model);
   });
 
   if (!hmOrders.length) {
