@@ -587,13 +587,17 @@ async function loadAllData() {
     DB.indoor_digits           = buildIndoorDigits(indoorRows);
     console.log('indoor models loaded:', Object.keys(DB.indoor_digits).length);
 
-    DB.handmade_outdoor_digits = buildHandmadeDigits(parseCSV(outHMTxt));
-    DB.handmade_indoor_digits  = buildHandmadeDigits(parseCSV(inHMTxt));
-    DB.handmade_outdoor        = Object.keys(DB.handmade_outdoor_digits);
-    DB.handmade_indoor         = Object.keys(DB.handmade_indoor_digits);
+    const outHMRows = parseCSV(outHMTxt);
+    const inHMRows  = parseCSV(inHMTxt);
+    DB.handmade_outdoor_digits = buildHandmadeDigits(outHMRows);
+    DB.handmade_indoor_digits  = buildHandmadeDigits(inHMRows);
+    // Build the full model lists from ALL rows (not just those with digit sub-entries)
+    DB.handmade_outdoor = [...new Set(outHMRows.map(r => (r.MODEL||'').trim()).filter(m => m && !m.startsWith('MODEL')))];
+    DB.handmade_indoor  = [...new Set(inHMRows.map(r  => (r.MODEL||'').trim()).filter(m => m && !m.startsWith('MODEL')))];
     DB.etn                     = buildETNs(parseCSV(etnTxt));
     console.log('ETN models loaded:', Object.keys(DB.etn).length);
 
+    rebuildHMSets();
     if (loadingEl) loadingEl.style.display = 'none';
     document.getElementById('appMain').style.display = 'flex';
   } catch(err) {
@@ -634,10 +638,17 @@ let currentOrderIdx = -1;
 let lineListingRows = [];
 let lineSort = { key: 'group', dir: 'asc' }; // default: outdoor group then indoor
 
-const hmOutdoor = new Set(DB.handmade_outdoor);
-const hmIndoor  = new Set(DB.handmade_indoor);
-const hmOutdoorDigits = DB.handmade_outdoor_digits;
-const hmIndoorDigits  = DB.handmade_indoor_digits;
+// These are rebuilt after loadAllData() populates DB
+let hmOutdoor = new Set();
+let hmIndoor  = new Set();
+let hmOutdoorDigits = {};
+let hmIndoorDigits  = {};
+function rebuildHMSets() {
+  hmOutdoor = new Set(DB.handmade_outdoor);
+  hmIndoor  = new Set(DB.handmade_indoor);
+  hmOutdoorDigits = DB.handmade_outdoor_digits;
+  hmIndoorDigits  = DB.handmade_indoor_digits;
+}
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 function getDigits(model) { return DB.outdoor_digits[model] || DB.indoor_digits[model] || null; }
@@ -1214,21 +1225,26 @@ function renderSummary() {
   let etnSection = '';
   if (etnOrders.length) {
     const etnRow = o => {
-      const e = getETN(o.model) || {};
-      const cd = isCustom(o.model) ? (customData[o.order+'_'+o.model]?.etn || {}) : {};
-      const panelSize = cd.size || o.etnSize || e.upgrade_size || '—';
-      const fullSize  = e.full_size || '—';
-      const fullQty   = cd.full_qty || e.full_qty || '—';
-      const halfSize  = e.half_size && e.half_size !== '-' && e.half_size !== '' ? e.half_size : '—';
-      const halfQty   = cd.half_qty || (halfSize !== '—' ? e.half_qty : '—');
-      const half = halfSize !== '—' ? `${halfSize} × ${halfQty}` : '—';
+      const cust = isCustom(o.model);
+      const e  = cust ? {} : (getETN(o.model) || {});
+      const cd = cust ? (customData[o.order+'_'+o.model]?.etn || {}) : {};
+      const panelSize = cust
+        ? (cd.size || o.etnSize || '—')
+        : (o.etnSize || e.upgrade_size || '—');
+      const fullEtn = cust
+        ? (cd.size && cd.full_qty ? `${cd.size} × ${cd.full_qty}` : '—')
+        : ((e.full_size && e.full_qty) ? `${e.full_size} × ${e.full_qty}` : '—');
+      const halfSize = cust ? '—' : (e.half_size && e.half_size !== '-' && e.half_size !== '' ? e.half_size : '—');
+      const half = cust
+        ? (cd.half_qty ? `— × ${cd.half_qty}` : '—')
+        : (halfSize !== '—' ? `${halfSize} × ${e.half_qty}` : '—');
       return `<tr>
         <td class="mono">${o.order}</td>
         <td class="mono">×${o.qty}</td>
-        <td><strong>${o.model}</strong>${isCustom(o.model) ? ' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>' : ''}</td>
+        <td><strong>${o.model}</strong>${cust ? ' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>' : ''}</td>
         <td>${colorTag(o)}</td>
         <td class="mono">${panelSize}</td>
-        <td class="mono">${fullSize} × ${fullQty}</td>
+        <td class="mono">${fullEtn}</td>
         <td class="mono">${half}</td>
       </tr>`;
     };
@@ -1263,7 +1279,7 @@ function renderSummary() {
 function renderHandmade() {
   const hmOrders = orders.filter(o => {
     if (isCustom(o.model)) return false;
-    return !!(hmOutdoorDigits[o.model] || hmIndoorDigits[o.model]);
+    return hmOutdoor.has(o.model) || hmIndoor.has(o.model);
   });
 
   if (!hmOrders.length) {
