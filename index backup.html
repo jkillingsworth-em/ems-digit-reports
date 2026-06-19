@@ -378,20 +378,6 @@ tr:hover td { background: rgba(255,255,255,0.018); }
   background: rgba(240,165,0,0.08); border: 1px solid rgba(240,165,0,0.2);
   border-radius: 4px; padding: 3px 10px;
 }
-.run-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:10px;flex-wrap:wrap}
-.run-bar-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.run-badge{font-family:'IBM Plex Mono',monospace;font-size:0.72rem;letter-spacing:1px;color:var(--accent2);background:rgba(224,92,42,0.12);padding:4px 10px;border-radius:5px;font-weight:600}
-.run-toggle{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
-.run-toggle button{background:var(--surface);color:var(--muted);border:none;padding:6px 12px;font-family:'IBM Plex Mono',monospace;font-size:0.74rem;cursor:pointer}
-.run-toggle button.rt-active{background:var(--accent);color:#fff;font-weight:600}
-.recon-strip{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
-.recon-pill{font-family:'IBM Plex Mono',monospace;font-size:0.7rem;padding:4px 9px;border-radius:5px;font-weight:600}
-.pending-box{background:rgba(224,92,42,0.06);border:1px solid rgba(224,92,42,0.3);border-radius:8px;padding:12px 14px;margin-bottom:14px}
-.pending-head{font-family:'IBM Plex Mono',monospace;font-size:0.74rem;letter-spacing:0.5px;color:var(--accent2);font-weight:600;margin-bottom:10px}
-.pending-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border);flex-wrap:wrap}
-.pending-info{font-family:'IBM Plex Mono',monospace;font-size:0.8rem}
-.pending-note{color:var(--muted);font-size:0.72rem;margin-left:6px}
-.pending-actions{display:flex;gap:6px}
 </style>
 </head>
 <body>
@@ -431,14 +417,6 @@ tr:hover td { background: rgba(255,255,255,0.018); }
       <div class="manual-entry">
         <textarea id="manualInput" placeholder="Paste order data from Claude's report:&#10;DATE, ORDER, QTY, MODEL, COLOR, ETN, ETN_SIZE&#10;&#10;e.g. JUNE 15, 92004, 1, LX1740, AMBER, FALSE,&#10;JUNE 15, 92005, 2, LX2665, , FALSE,&#10;JUNE 16, 92006, 1, LXCUSTOM-O1, RED, TRUE, 9X56"></textarea>
         <button class="btn btn-primary btn-full" onclick="parseManualInput()">+ Add Orders</button>
-      </div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-label">Production Check (compare run)</div>
-      <div class="manual-entry">
-        <textarea id="prodInput" placeholder="Paste the PRODUCTION list extraction here to compare against the pool.&#10;Same format. Matches by ORDER + MODEL.&#10;Shot clocks absent from production are expected."></textarea>
-        <button class="btn btn-secondary btn-full" onclick="parseProductionInput()">⚖ Compare Production Run</button>
-        <div class="parse-info" id="prodInfo"></div>
       </div>
     </div>
     <div class="sidebar-section" style="display:flex;gap:6px;align-items:center;">
@@ -622,14 +600,6 @@ async function loadAllData() {
     rebuildHMSets();
     if (loadingEl) loadingEl.style.display = 'none';
     document.getElementById('appMain').style.display = 'flex';
-
-    // Restore any persisted pool / run state
-    if (Persist.load()) {
-      orders.forEach(o => { if (o.runStatus === undefined) o.runStatus = null; });
-      renderFlagsPanel();
-      updateWeekLabel();
-      showView('summary');
-    }
   } catch(err) {
     if (loadingEl) loadingEl.innerHTML = '<div style="color:#e74c3c;font-family:monospace;padding:30px;font-size:0.85rem;line-height:1.8">Failed to load data from Google Sheets.<br>Check your connection and refresh.<br><br><strong>' + err + '</strong></div>';
     console.error('Data load error:', err);
@@ -667,66 +637,6 @@ let currentView = 'order'; // 'order' | 'summary' | 'handmade'
 let currentOrderIdx = -1;
 let lineListingRows = [];
 let lineSort = { key: 'group', dir: 'asc' }; // default: outdoor group then indoor
-
-// ── PRODUCTION RUN / POOL STATE ──────────────────────────────────────────────
-// Each order in `orders` is the master POOL. runStatus tracks production-run state:
-//   'in_run'  — matched on production list, building now
-//   'held'    — in pool but absent from production run (e.g. JUNE 22 holdover)
-//   'shotclock' — shot-clock model absent from production (expected, suppressed noise)
-//   'changed' — matched but qty/model differs
-//   null      — no production list processed yet (pool-only)
-let runActive = false;            // has a production list been processed this session?
-let runLabel = '';                // label for the production run
-let pendingRush = [];             // [{order, qty, model, color, etn, etnSize, date}] awaiting confirm
-let totalsView = 'run';           // 'run' | 'pool' — which set the report totals reflect
-
-// Models considered shot clocks (knowingly omitted from production lists)
-const SHOTCLOCK_MODELS = new Set(['LX2160','LX2150','LX2170','LX2180','LX2120','LX2158']);
-function isShotClock(model) {
-  const base = model.replace(/S$/,''); // tolerate singular suffix
-  return SHOTCLOCK_MODELS.has(model) || SHOTCLOCK_MODELS.has(base);
-}
-
-// ── PERSISTENCE LAYER (isolated; swap to Vercel KV / Sheets later) ────────────
-// Only this module touches storage. To move server-side, reimplement save/load.
-const STORE_KEY = 'ems_digit_pool_v1';
-const Persist = {
-  save() {
-    try {
-      const snapshot = {
-        orders, customData, runActive, runLabel, pendingRush, totalsView,
-        dates: {
-          d1: (document.getElementById('date1')||{}).value || '',
-          d2: (document.getElementById('date2')||{}).value || '',
-          note: (document.getElementById('dateNote')||{}).value || '',
-        },
-        savedAt: Date.now(),
-      };
-      localStorage.setItem(STORE_KEY, JSON.stringify(snapshot));
-    } catch (e) { /* storage unavailable — silent */ }
-  },
-  load() {
-    try {
-      const raw = localStorage.getItem(STORE_KEY);
-      if (!raw) return false;
-      const s = JSON.parse(raw);
-      orders      = s.orders || [];
-      customData  = s.customData || {};
-      runActive   = s.runActive || false;
-      runLabel    = s.runLabel || '';
-      pendingRush = s.pendingRush || [];
-      totalsView  = s.totalsView || 'run';
-      if (s.dates) {
-        const d1=document.getElementById('date1'), d2=document.getElementById('date2'), dn=document.getElementById('dateNote');
-        if (d1) d1.value = s.dates.d1||''; if (d2) d2.value = s.dates.d2||''; if (dn) dn.value = s.dates.note||'';
-      }
-      return orders.length > 0 || pendingRush.length > 0;
-    } catch (e) { return false; }
-  },
-  clear() {
-    try { localStorage.removeItem(STORE_KEY); } catch(e){}
-  }
-};
 
 // These are rebuilt after loadAllData() populates DB
 let hmOutdoor = new Set();
@@ -786,126 +696,17 @@ function parseManualInput() {
 
   document.getElementById('parseInfo').textContent = `${added} order(s) added${skipped ? `, ${skipped} skipped` : ''}.`;
   document.getElementById('manualInput').value = '';
-  orders.forEach(o => { if (o.runStatus === undefined) o.runStatus = null; });
-  Persist.save();
   renderFlagsPanel();
   if (orders.length > 0) showView('summary');
 }
 
-// ── PRODUCTION LIST PARSE + MATCH ────────────────────────────────────────────
-// Accepts the same paste format (DATE, ORDER, QTY, MODEL, COLOR, ETN, ETN_SIZE).
-// Matches against the master pool by ORDER + MODEL. Assigns run statuses,
-// routes unmatched production rows to the pending-rush box.
-function parseProductionInput() {
-  const raw = document.getElementById('prodInput').value.trim();
-  if (!raw) return;
-  const lines = raw.split('\n').filter(l => l.trim());
-
-  // Build production set
-  const prod = [];
-  lines.forEach(line => {
-    const parts = line.split(',').map(p => p.trim());
-    if (parts.length < 4) return;
-    const date  = parts[0].toUpperCase();
-    const order = parts[1].replace(/^order[:\s]*/i,'').trim();
-    const qty   = parseInt(parts[2]) || 1;
-    let model   = parts[3].toUpperCase();
-    if (/^\d/.test(model)) model = 'LX' + model; // production omits LX prefix
-    const color = (parts[4]||'').toUpperCase();
-    const etnRaw= (parts[5]||'').toUpperCase();
-    const etnSize=(parts[6]||'').toUpperCase();
-    const etn   = etnRaw === 'TRUE' || etnRaw === '1';
-    if (!order || !model) return;
-    prod.push({ date, order, qty, model, color, etn, etnSize });
-  });
-
-  // Reset prior run state
-  orders.forEach(o => o.runStatus = null);
-  pendingRush = [];
-  runActive = true;
-  runLabel = prod[0]?.date || 'PRODUCTION RUN';
-
-  const prodMatched = new Set();
-
-  // Match each pool order against production
-  orders.forEach(o => {
-    const hit = prod.find((p,i) => p.order === o.order && p.model === o.model && !prodMatched.has(i));
-    if (hit) {
-      const idx = prod.indexOf(hit);
-      prodMatched.add(idx);
-      // Detect qty change
-      o.runStatus = (hit.qty !== o.qty) ? 'changed' : 'in_run';
-      o.runProdQty = hit.qty;
-    } else {
-      // Not in this production run
-      o.runStatus = isShotClock(o.model) ? 'shotclock' : 'held';
-      o.runProdQty = null;
-    }
-  });
-
-  // Unmatched production rows → rush pending (skip ones that matched on order alone but diff model? treat as rush)
-  prod.forEach((p,i) => {
-    if (!prodMatched.has(i)) {
-      // Was the order number in the pool under a different model? Note that for context.
-      const sameOrderDiffModel = orders.find(o => o.order === p.order && o.model !== p.model);
-      pendingRush.push({ ...p, note: sameOrderDiffModel ? `Order ${p.order} exists in pool as ${sameOrderDiffModel.model}` : 'Not on any standard list' });
-    }
-  });
-
-  totalsView = 'run';
-  Persist.save();
-  document.getElementById('prodInfo').textContent =
-    `Run "${runLabel}" applied. ${orders.filter(o=>o.runStatus==='in_run'||o.runStatus==='changed').length} in run, ` +
-    `${orders.filter(o=>o.runStatus==='held').length} held, ${pendingRush.length} pending.`;
-  document.getElementById('prodInput').value = '';
-  renderFlagsPanel();
-  showView('summary');
-}
-
-function confirmRush(i) {
-  const r = pendingRush[i];
-  if (!r) return;
-  orders.push({ ...r, runStatus: 'in_run', runProdQty: r.qty, id: r.order + '_' + r.model + '_' + Date.now() });
-  pendingRush.splice(i,1);
-  Persist.save();
-  renderFlagsPanel();
-  if (currentView==='summary') renderSummary();
-}
-function dismissRush(i) {
-  pendingRush.splice(i,1);
-  Persist.save();
-  renderFlagsPanel();
-}
-function clearRun() {
-  runActive = false; runLabel=''; pendingRush=[];
-  orders.forEach(o => { o.runStatus = null; o.runProdQty = null; });
-  totalsView = 'pool';
-  Persist.save();
-  renderFlagsPanel();
-  if (currentView==='summary') renderSummary();
-}
-function setTotalsView(v) {
-  totalsView = v;
-  Persist.save();
-  renderSummary();
-}
-
-// Orders that count toward the active view
-function activeOrders() {
-  if (totalsView === 'pool' || !runActive) return orders;
-  return orders.filter(o => o.runStatus === 'in_run' || o.runStatus === 'changed');
-}
-
 // ── CLEAR ────────────────────────────────────────────────────────────────────
 function clearAll() {
-  if (!confirm('Clear all orders, the pool, and any production run? This cannot be undone.')) return;
+  if (!confirm('Clear all orders?')) return;
   orders = []; customData = {}; currentOrderIdx = -1;
-  runActive = false; runLabel=''; pendingRush=[]; totalsView='run';
-  Persist.clear();
   renderOrderList();
   document.getElementById('content').innerHTML = '<div class="empty-state"><p>All cleared.</p></div>';
   document.getElementById('parseInfo').textContent = '';
-  const pi = document.getElementById('prodInfo'); if (pi) pi.textContent='';
 }
 
 // ── ORDER LIST ───────────────────────────────────────────────────────────────
@@ -1281,7 +1082,7 @@ function computeTotals() {
   const amber = {}, red = {}, indoor = {};
   const addTo = (map, digit, qty) => { map[digit] = (map[digit]||0) + qty; };
 
-  activeOrders().forEach(o => {
+  orders.forEach(o => {
     const ind = isIndoor(o.model);
     const cust = isCustom(o.model);
     const map = ind ? indoor : (o.color==='RED' ? red : amber);
@@ -1372,15 +1173,13 @@ function lineRowHtml(o) {
 }
 
 function renderSummary() {
-  const view = activeOrders();
   const { amber, red, indoor } = computeTotals();
-  const outdoorCount = view.filter(o => !isIndoor(o.model)).reduce((s,o)=>s+o.qty,0);
-  const indoorCount  = view.filter(o =>  isIndoor(o.model)).reduce((s,o)=>s+o.qty,0);
-  const amberCount   = view.filter(o => o.color==='AMBER').reduce((s,o)=>s+o.qty,0);
-  const redCount     = view.filter(o => o.color==='RED').reduce((s,o)=>s+o.qty,0);
-  const etnCount     = view.filter(o => o.etn).reduce((s,o)=>s+o.qty,0);
-  const customPending= view.filter(o => isCustom(o.model) && !customData[o.order+'_'+o.model]).length;
-  const etnNoSize    = view.filter(o => o.etn && !o.etnSize && !isCustom(o.model)).length;
+  const outdoorCount = orders.filter(o => !isIndoor(o.model)).reduce((s,o)=>s+o.qty,0);
+  const indoorCount  = orders.filter(o =>  isIndoor(o.model)).reduce((s,o)=>s+o.qty,0);
+  const amberCount   = orders.filter(o => o.color==='AMBER').reduce((s,o)=>s+o.qty,0);
+  const redCount     = orders.filter(o => o.color==='RED').reduce((s,o)=>s+o.qty,0);
+  const etnCount     = orders.filter(o => o.etn).reduce((s,o)=>s+o.qty,0);
+  const customPending= orders.filter(o => isCustom(o.model) && !customData[o.order+'_'+o.model]).length;
 
   // Handmade digit-type names (sink these to the bottom of each digit column)
   const hmDigitNames = new Set([
@@ -1409,7 +1208,7 @@ function renderSummary() {
 
   // ── Order line listing (sortable) ──
   // Store all rows globally so header clicks can re-sort without recomputing the report
-  lineListingRows = view.map(o => ({
+  lineListingRows = orders.map(o => ({
     date: o.date || '', order: o.order, qty: o.qty, model: o.model, color: o.color,
     etn: o.etn, etnSize: o.etnSize,
     indoor: isIndoor(o.model), custom: isCustom(o.model)
@@ -1422,7 +1221,7 @@ function renderSummary() {
     if (o.color === 'RED')   return '<span class="color-tag red">RED</span>';
     return '<span class="color-tag indoor">INDOOR</span>';
   };
-  const etnOrders = view.filter(o => o.etn);
+  const etnOrders = orders.filter(o => o.etn);
   let etnSection = '';
   if (etnOrders.length) {
     const etnRow = o => {
@@ -1455,80 +1254,11 @@ function renderSummary() {
       <tbody>${etnOrders.map(etnRow).join('')}</tbody></table></div>`;
   }
 
-  // ── Run controls + reconciliation ──
-  const heldOrders  = orders.filter(o => o.runStatus === 'held');
-  const shotHeld    = orders.filter(o => o.runStatus === 'shotclock');
-  const changedOrd  = orders.filter(o => o.runStatus === 'changed');
-  const poolTotal   = orders.reduce((s,o)=>s+o.qty,0);
-  const runTotal    = orders.filter(o=>o.runStatus==='in_run'||o.runStatus==='changed').reduce((s,o)=>s+o.qty,0);
-
-  let runControls = '';
-  if (runActive) {
-    const tag = (label, n, color) => n>0 ? `<span class="recon-pill" style="background:${color}22;color:${color}">${label}: ${n}</span>` : '';
-    runControls = `
-    <div class="run-bar">
-      <div class="run-bar-left">
-        <span class="run-badge">PRODUCTION RUN${runLabel?`: ${runLabel}`:''}</span>
-        <div class="run-toggle">
-          <button class="${totalsView==='run'?'rt-active':''}" onclick="setTotalsView('run')">This Run (${runTotal})</button>
-          <button class="${totalsView==='pool'?'rt-active':''}" onclick="setTotalsView('pool')">Full Pool (${poolTotal})</button>
-        </div>
-      </div>
-      <button class="btn btn-danger btn-sm" onclick="clearRun()">End Run</button>
-    </div>
-    <div class="recon-strip">
-      ${tag('In run', orders.filter(o=>o.runStatus==='in_run').length, '#22c55e')}
-      ${tag('Changed', changedOrd.length, '#f59e0b')}
-      ${tag('Held', heldOrders.length, '#3b82f6')}
-      ${tag('Shot clocks held', shotHeld.length, '#8b5cf6')}
-      ${tag('Pending rush', pendingRush.length, '#e05c2a')}
-      ${tag('Custom awaiting digits', customPending, '#ef4444')}
-      ${tag('ETN awaiting size', etnNoSize, '#ef4444')}
-    </div>`;
-  } else {
-    runControls = `<div class="recon-strip">
-      ${customPending>0?`<span class="recon-pill" style="background:#ef444422;color:#ef4444">Custom awaiting digits: ${customPending}</span>`:''}
-      ${etnNoSize>0?`<span class="recon-pill" style="background:#ef444422;color:#ef4444">ETN awaiting size: ${etnNoSize}</span>`:''}
-      ${pendingRush.length>0?`<span class="recon-pill" style="background:#e05c2a22;color:#e05c2a">Pending rush: ${pendingRush.length}</span>`:''}
-    </div>`;
-  }
-
-  // Pending rush box
-  let pendingBox = '';
-  if (pendingRush.length) {
-    pendingBox = `<div class="pending-box">
-      <div class="pending-head">⏳ Pending Rush Orders — on production list but not in the pool</div>
-      ${pendingRush.map((r,i)=>`<div class="pending-row">
-        <div class="pending-info"><strong>${r.order}</strong> · ×${r.qty} · ${r.model} ${r.color?`· ${r.color}`:''} <span class="pending-note">${r.note||''}</span></div>
-        <div class="pending-actions">
-          <button class="btn btn-primary btn-sm" onclick="confirmRush(${i})">+ Add to report</button>
-          <button class="btn btn-secondary btn-sm" onclick="dismissRush(${i})">Dismiss</button>
-        </div>
-      </div>`).join('')}
-    </div>`;
-  }
-
-  // Held listing (collapsed detail)
-  let heldBox = '';
-  if (runActive && (heldOrders.length || shotHeld.length)) {
-    const rowsH = [...heldOrders, ...shotHeld].map(o =>
-      `<tr><td class="mono">${o.order}</td><td class="mono">×${o.qty}</td><td><strong>${o.model}</strong></td>
-       <td>${o.runStatus==='shotclock'?'<span class="color-tag" style="background:#8b5cf622;color:#8b5cf6">SHOT CLOCK</span>':'<span class="color-tag" style="background:#3b82f622;color:#3b82f6">HELD</span>'}</td>
-       <td style="color:var(--muted);font-size:0.75rem">${o.date||'—'}</td></tr>`).join('');
-    heldBox = `<div class="section-label-lg">Held — Not in This Production Run</div>
-      <div class="tl-card"><table class="tl-table">
-      <thead><tr><th>Order</th><th>Qty</th><th>Model</th><th>Status</th><th>Date</th></tr></thead>
-      <tbody>${rowsH}</tbody></table></div>`;
-  }
-
   document.getElementById('content').innerHTML = `
     <div class="view-header"><div><div class="view-title">EMS Digit Report</div>${weekLabel ? `<div class="view-sub">${weekLabel}</div>` : ''}</div></div>
-    ${runControls}
-    ${pendingBox}
     ${customPending>0 ? `<div class="alert alert-warn">⚠ ${customPending} CUSTOM order(s) have no digit data entered yet — totals are incomplete.</div>` : ''}
-    ${etnNoSize>0 ? `<div class="alert alert-warn">⚠ ${etnNoSize} ETN order(s) flagged but missing a panel size — verify from paperwork.</div>` : ''}
     <div class="summary-grid">
-      <div class="stat-card"><div class="num">${outdoorCount+indoorCount}</div><div class="lbl">${totalsView==='pool'?'Pool Boards':'Boards This Run'}</div></div>
+      <div class="stat-card"><div class="num">${outdoorCount+indoorCount}</div><div class="lbl">Total Boards</div></div>
       <div class="stat-card"><div class="num" style="color:var(--amber)">${amberCount}</div><div class="lbl">Outdoor Amber</div></div>
       <div class="stat-card"><div class="num" style="color:var(--red)">${redCount}</div><div class="lbl">Outdoor Red</div></div>
       <div class="stat-card"><div class="num" style="color:var(--blue)">${indoorCount}</div><div class="lbl">Indoor</div></div>
@@ -1542,8 +1272,7 @@ function renderSummary() {
     </div>
     ${etnSection}
     <div class="section-label-lg">Order Line Listing</div>
-    ${lineTable}
-    ${heldBox}`;
+    ${lineTable}`;
 }
 
 // ── HANDMADE ─────────────────────────────────────────────────────────────────
