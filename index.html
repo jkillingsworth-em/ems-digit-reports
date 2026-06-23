@@ -1548,7 +1548,8 @@ function renderSummary() {
 
 // ── HANDMADE ─────────────────────────────────────────────────────────────────
 function renderHandmade() {
-  const hmOrders = orders.filter(o => {
+  const view = activeOrders();
+  const hmOrders = view.filter(o => {
     if (isCustom(o.model)) return false;
     return hmOutdoor.has(o.model) || hmIndoor.has(o.model);
   });
@@ -1559,44 +1560,35 @@ function renderHandmade() {
     return;
   }
 
-  const makeCard = o => {
+  // Aggregate handmade digits the same way Digit Totals does: AMBER / RED / INDOOR maps
+  const amber = {}, red = {}, indoor = {};
+  hmOrders.forEach(o => {
     const ind = isIndoor(o.model);
+    const map = ind ? indoor : (o.color === 'RED' ? red : amber);
     const hmDigits = hmOutdoorDigits[o.model] || hmIndoorDigits[o.model] || [];
-    const colorLabel = o.color ? `${o.color} DIGITS` : '';
-    const colorStyle = o.color==='AMBER' ? 'color:var(--amber)' : o.color==='RED' ? 'color:var(--red)' : 'color:var(--blue)';
-    const multi = o.qty > 1;
-    const chips = hmDigits.map(d => {
-      const total = d.qty * o.qty;
-      if (multi) {
-        // Order qty > 1: DIGIT ×perBoard = total
-        return `<div class="hm-chip"><span>${d.digit}</span><span style="color:var(--muted)">×${d.qty}</span><span class="cqty">= ${total}</span></div>`;
-      }
-      // Order qty 1
-      if (d.qty > 1) {
-        // Single board, multiple of one digit: DIGIT = qty
-        return `<div class="hm-chip"><span>${d.digit}</span><span class="cqty">= ${d.qty}</span></div>`;
-      }
-      // Single board, single digit: just the name
-      return `<div class="hm-chip"><span>${d.digit}</span></div>`;
-    }).join('');
-    const metaQty = multi ? ` · ×${o.qty}` : '';
-    return `<div class="hm-order-card">
-      <div class="hm-order-row">
-        <span class="hm-order-model" style="${colorStyle}">${o.model}</span>
-        <span class="hm-order-meta">#${o.order}${metaQty}${colorLabel ? ' · ' + colorLabel : ''}</span>
-      </div>
-      <div class="hm-digit-chips">${chips}</div>
-    </div>`;
-  };
+    hmDigits.forEach(d => {
+      map[d.digit] = (map[d.digit] || 0) + d.qty * o.qty;
+    });
+  });
 
-  const outdoorCards = hmOrders.filter(o => !isIndoor(o.model));
-  const indoorCards  = hmOrders.filter(o =>  isIndoor(o.model));
+  // Same column builder shape as Digit Totals' makeCol
+  const makeCol = (title, cls, map, qtyClass) => {
+    const all = Object.entries(map).sort((a,b)=>a[0].localeCompare(b[0]));
+    if (!all.length) return `<div class="dg-col-panel"><div class="dg-col-header ${cls}">${title}</div><div style="padding:14px;font-size:0.78rem;color:var(--muted)">None this week</div></div>`;
+    const rows = all.map(([d,q])=>`<tr><td>${d}</td><td class="${qtyClass}">${Math.round(q)}</td></tr>`).join('');
+    return `<div class="dg-col-panel"><div class="dg-col-header ${cls}">${title}</div>
+      <table class="dg-table"><tbody>${rows}</tbody></table></div>`;
+  };
 
   const weekLabel = getWeekLabel();
   document.getElementById('content').innerHTML = `
     <div class="view-header"><div><div class="view-title">EMS Digit Report — Handmade</div>${weekLabel ? `<div class="view-sub">${weekLabel}</div>` : ''}</div></div>
-    ${outdoorCards.length ? `<div class="hm-section-title" style="color:var(--amber)">Outdoor</div>${outdoorCards.map(makeCard).join('')}` : ''}
-    ${indoorCards.length  ? `<div class="hm-section-title" style="color:var(--blue)">Indoor</div>${indoorCards.map(makeCard).join('')}` : ''}`;
+    <div class="section-label-lg">Handmade (In-House) Digit Totals</div>
+    <div class="dg-columns">
+      ${makeCol('AMBER','amber',amber,'amber-qty')}
+      ${makeCol('RED','red',red,'red-qty')}
+      ${makeCol('INDOOR','indoor',indoor,'indoor-qty')}
+    </div>`;
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
