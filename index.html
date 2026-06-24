@@ -565,35 +565,61 @@ function buildETNs(rows) {
   return map;
 }
 
-async function fetchCSV(url) {
+async function fetchCSV(url, attempt = 1) {
   // Use our own Vercel serverless proxy - no CORS issues
   const proxyUrl = '/api/sheets?url=' + encodeURIComponent(url);
-  const res = await fetch(proxyUrl);
-  if (!res.ok) throw new Error('Proxy error HTTP ' + res.status);
-  const text = await res.text();
-  if (!text || text.length < 20) throw new Error('Empty response from proxy');
-  console.log('fetchCSV OK, first line:', text.split('\n')[0].substring(0, 60));
-  return text;
+  const MAX_ATTEMPTS = 4;
+  const TIMEOUT_MS = 12000;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const res = await fetch(proxyUrl, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('Proxy error HTTP ' + res.status);
+    const text = await res.text();
+    if (!text || text.length < 20) throw new Error('Empty response from proxy');
+    console.log('fetchCSV OK, first line:', text.split('\n')[0].substring(0, 60));
+    return text;
+  } catch (err) {
+    if (attempt < MAX_ATTEMPTS) {
+      const delay = attempt * 1000; // 1s, 2s, 3s backoff
+      console.warn(`fetchCSV attempt ${attempt} failed (${err.message}), retrying in ${delay}ms...`);
+      await new Promise(r => setTimeout(r, delay));
+      return fetchCSV(url, attempt + 1);
+    }
+    throw new Error(`Failed after ${MAX_ATTEMPTS} attempts: ${err.message}`);
+  }
 }
 
 async function loadAllData() {
   const loadingEl = document.getElementById('loadingOverlay');
   const setStatus = msg => { if (loadingEl) loadingEl.querySelector('.load-status').textContent = msg; };
   try {
-    setStatus('Fetching outdoor model data...');
-    const outdoorTxt = await fetchCSV(SHEET_URLS.outdoor_models);
+    setStatus('Fetching all sheet data...');
+    const labels = {
+      outdoor_models: 'outdoor model data', indoor_models: 'indoor model data',
+      outdoor_handmade: 'outdoor handmade data', indoor_handmade: 'indoor handmade data',
+      etns: 'ETN data',
+    };
+    let doneCount = 0;
+    const total = Object.keys(SHEET_URLS).length;
+    const fetchTracked = async (key) => {
+      const txt = await fetchCSV(SHEET_URLS[key]);
+      doneCount++;
+      setStatus(`Loaded ${labels[key]} (${doneCount}/${total})...`);
+      return [key, txt];
+    };
+
+    const results = await Promise.all(Object.keys(SHEET_URLS).map(fetchTracked));
+    const txtByKey = Object.fromEntries(results);
+
+    const outdoorTxt = txtByKey.outdoor_models;
+    const indoorTxt   = txtByKey.indoor_models;
+    const outHMTxt    = txtByKey.outdoor_handmade;
+    const inHMTxt     = txtByKey.indoor_handmade;
+    const etnTxt       = txtByKey.etns;
     console.log('outdoor first line:', outdoorTxt.split('\n')[0]);
-
-    setStatus('Fetching indoor model data...');
-    const indoorTxt = await fetchCSV(SHEET_URLS.indoor_models);
     console.log('indoor first line:', indoorTxt.split('\n')[0]);
-
-    setStatus('Fetching handmade data...');
-    const outHMTxt = await fetchCSV(SHEET_URLS.outdoor_handmade);
-    const inHMTxt  = await fetchCSV(SHEET_URLS.indoor_handmade);
-
-    setStatus('Fetching ETN data...');
-    const etnTxt = await fetchCSV(SHEET_URLS.etns);
     console.log('etn first line:', etnTxt.split('\n')[0]);
 
     setStatus('Building data...');
@@ -631,7 +657,7 @@ async function loadAllData() {
       showView('summary');
     }
   } catch(err) {
-    if (loadingEl) loadingEl.innerHTML = '<div style="color:#e74c3c;font-family:monospace;padding:30px;font-size:0.85rem;line-height:1.8">Failed to load data from Google Sheets.<br>Check your connection and refresh.<br><br><strong>' + err + '</strong></div>';
+    if (loadingEl) loadingEl.innerHTML = '<div style="color:#e74c3c;font-family:monospace;padding:30px;font-size:0.85rem;line-height:1.8;text-align:center">Failed to load data from Google Sheets after several attempts.<br>This is usually temporary.<br><br><strong>' + err + '</strong><br><br><button onclick="loadAllData()" style="background:#f0a500;color:#000;border:none;padding:8px 18px;border-radius:5px;font-weight:600;cursor:pointer;font-family:inherit">Retry</button></div>';
     console.error('Data load error:', err);
   }
 }
