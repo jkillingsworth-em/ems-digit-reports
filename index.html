@@ -297,19 +297,19 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 .th-sort { cursor: pointer; user-select: none; transition: color 0.12s; white-space: nowrap; }
 .th-sort:hover { color: var(--accent); }
 .th-sort.th-active { color: var(--accent); }
-.th-grouprow td { padding: 0; border: none; background: var(--surface2); }
-.group-toggle {
-  background: none; border: none; cursor: pointer;
-  font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; letter-spacing: 1px;
-  text-transform: uppercase; color: var(--muted); padding: 6px 10px; width: 100%; text-align: left;
-  transition: color 0.12s;
-}
-.group-toggle:hover { color: var(--accent); }
-.group-toggle.th-active { color: var(--accent); }
 .tl-section-row td {
   background: var(--surface2); font-family: 'IBM Plex Mono', monospace;
   font-size: 0.62rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
 }
+.tl-section-toggle {
+  background: var(--surface); border: 1px solid var(--border); color: var(--accent);
+  border-radius: 3px; width: 18px; height: 18px; line-height: 1; cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
+  flex-shrink: 0; transition: all 0.12s;
+}
+.tl-section-toggle:hover { border-color: var(--accent); background: rgba(240,165,0,0.1); }
 .color-tag { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 0.68rem; font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
 .color-tag.amber { background: rgba(245,158,11,0.15); color: var(--amber); }
 .color-tag.red { background: rgba(231,76,60,0.15); color: var(--red); }
@@ -329,12 +329,6 @@ tr:hover td { background: rgba(255,255,255,0.018); }
   padding: 10px 14px 12px 30px; color: var(--muted); font-size: 0.78rem;
   background: rgba(255,255,255,0.012); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
-.tl-expand-all {
-  background: none; border: 1px solid var(--border); color: var(--muted);
-  border-radius: 4px; padding: 4px 10px; font-size: 0.68rem; cursor: pointer;
-  font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.5px; transition: all 0.12s;
-}
-.tl-expand-all:hover { border-color: var(--accent); color: var(--accent); }
 
 .parse-info { font-size: 0.7rem; color: var(--muted); font-family: 'IBM Plex Mono', monospace; padding: 6px 16px; border-top: 1px solid var(--border); }
 .sidebar-footer { padding: 8px 16px; border-top: 1px solid var(--border); display: flex; gap: 6px; }
@@ -1377,15 +1371,14 @@ function renderLineListing() {
     // Default grouped view: Outdoor section then Indoor section, each by order #
     const out = rows.filter(r => !r.indoor).sort((a,b)=>a.order.localeCompare(b.order));
     const ind = rows.filter(r =>  r.indoor).sort((a,b)=>a.order.localeCompare(b.order));
-    if (out.length) body += '<tr class="tl-section-row"><td colspan="6">Outdoor</td></tr>' + out.map(lineRowHtml).join('');
-    if (ind.length) body += '<tr class="tl-section-row"><td colspan="6">Indoor</td></tr>'  + ind.map(lineRowHtml).join('');
+    if (out.length) body += sectionHeaderHtml('Outdoor', 'outdoor') + out.map(o => lineRowHtml(o, 'outdoor')).join('');
+    if (ind.length) body += sectionHeaderHtml('Indoor', 'indoor')  + ind.map(o => lineRowHtml(o, 'indoor')).join('');
   } else {
     rows.sort(cmp[lineSort.key]);
     body = rows.map(lineRowHtml).join('');
   }
 
   const arrow = k => lineSort.key === k ? (lineSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
-  const groupActive = lineSort.key === 'group' ? ' th-active' : '';
   return `<div class="tl-card" id="lineListingWrap"><table class="tl-table">
     <thead><tr>
       <th class="th-sort${lineSort.key==='date'?' th-active':''}" onclick="sortLineListing('date')">Date${arrow('date')}</th>
@@ -1395,16 +1388,24 @@ function renderLineListing() {
       <th class="th-sort${lineSort.key==='color'?' th-active':''}" onclick="sortLineListing('color')">Color${arrow('color')}</th>
       <th class="th-sort${lineSort.key==='etn'?' th-active':''}" onclick="sortLineListing('etn')">ETN Size${arrow('etn')}</th>
     </tr>
-    <tr class="th-grouprow"><td colspan="6" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-      <button class="group-toggle${groupActive}" style="width:auto;flex:1" onclick="sortLineListing('group')">⊞ Group by Outdoor / Indoor</button>
-      <button class="tl-expand-all" id="tlExpandAllBtn" onclick="toggleAllLineDetails()">⊞ Expand All</button>
-    </td></tr>
     </thead><tbody>${body}</tbody></table></div>`;
 }
 
-function lineRowHtml(o) {
+// Section divider row ("Outdoor" / "Indoor") with its own expand/collapse-all toggle.
+// sectionKey scopes the toggle to just the rows in that section.
+function sectionHeaderHtml(label, sectionKey) {
+  return `<tr class="tl-section-row" data-section="${sectionKey}">
+    <td colspan="6">
+      <button class="tl-section-toggle" id="tlSectionBtn_${sectionKey}" onclick="toggleSectionDetails('${sectionKey}')" title="Expand/collapse ${label}">+</button>
+      <span>${label}</span>
+    </td>
+  </tr>`;
+}
+
+function lineRowHtml(o, sectionKey) {
   const safeId = String(o.id).replace(/[^a-zA-Z0-9]/g,'_');
-  return `<tr class="tl-row" id="tlrow_${safeId}" onclick="toggleLineDetail('${o.id}')">
+  const secAttr = sectionKey ? ` data-section="${sectionKey}"` : '';
+  return `<tr class="tl-row" id="tlrow_${safeId}"${secAttr} onclick="toggleLineDetail('${o.id}')">
     <td class="mono" style="color:var(--muted);font-size:0.75rem"><span class="tl-chevron" id="tlchev_${safeId}">▸</span> ${o.date || '—'}</td>
     <td class="mono">${o.order}</td>
     <td class="mono">×${o.qty}</td>
@@ -1412,7 +1413,7 @@ function lineRowHtml(o) {
     <td>${lineColorTag(o)}</td>
     <td class="mono">${o.etn ? (o.etnSize || 'ETN') : '—'}</td>
   </tr>
-  <tr class="tl-detail-row" id="tldetail_${safeId}" style="display:none"><td colspan="6"></td></tr>`;
+  <tr class="tl-detail-row" id="tldetail_${safeId}"${secAttr} style="display:none"><td colspan="6"></td></tr>`;
 }
 
 // Expand/collapse a line-listing row to show its digit breakdown.
@@ -1443,13 +1444,14 @@ function toggleLineDetail(id) {
   if (rowEl) rowEl.classList.add('tl-row-open');
 }
 
-// Expand or collapse every row in the line listing at once.
-function toggleAllLineDetails() {
-  const anyOpen = lineListingRows.some(r => {
+// Expand or collapse every row within a single section (Outdoor or Indoor).
+function toggleSectionDetails(sectionKey) {
+  const sectionRows = lineListingRows.filter(r => (r.indoor ? 'indoor' : 'outdoor') === sectionKey);
+  const anyOpen = sectionRows.some(r => {
     const el = document.getElementById('tldetail_' + String(r.id).replace(/[^a-zA-Z0-9]/g,'_'));
     return el && el.style.display !== 'none';
   });
-  lineListingRows.forEach(r => {
+  sectionRows.forEach(r => {
     const safeId = String(r.id).replace(/[^a-zA-Z0-9]/g,'_');
     const detailRow = document.getElementById('tldetail_' + safeId);
     const chev = document.getElementById('tlchev_' + safeId);
@@ -1467,8 +1469,8 @@ function toggleAllLineDetails() {
       if (rowEl) rowEl.classList.add('tl-row-open');
     }
   });
-  const btn = document.getElementById('tlExpandAllBtn');
-  if (btn) btn.textContent = anyOpen ? '⊞ Expand All' : '⊟ Collapse All';
+  const btn = document.getElementById('tlSectionBtn_' + sectionKey);
+  if (btn) btn.textContent = anyOpen ? '+' : '−';
 }
 
 // Builds the digit-breakdown panel shown inside an expanded line-listing row.
