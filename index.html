@@ -816,6 +816,22 @@ function hasHandmadeDigits(model) {
   return !!(hmOutdoorDigits[model] || hmIndoorDigits[model]);
 }
 
+// Whether an order line's MODEL cell should render in the handmade/in-house green.
+// Standard models: true if the model has any handmade digit sub-entries at all.
+// Custom orders: true only if the digits actually saved for this specific order
+// include at least one in-house item (custom orders don't have a fixed model-level
+// handmade flag — it depends entirely on what was picked).
+function lineModelIsHandmade(o) {
+  if (o.custom) {
+    const cd = customData[o.id];
+    if (!cd?.digits?.length) return false;
+    const ind = isIndoor(o.model);
+    const hmNames = new Set(ind ? DB.custom_indoor_handmade : DB.custom_outdoor_handmade);
+    return cd.digits.some(d => d.qty > 0 && hmNames.has(d.desc));
+  }
+  return hasHandmadeDigits(o.model);
+}
+
 // ── PARSE INPUT ──────────────────────────────────────────────────────────────
 function parseManualInput() {
   const raw = document.getElementById('manualInput').value.trim();
@@ -1427,11 +1443,12 @@ function sectionHeaderHtml(label, sectionKey) {
 function lineRowHtml(o, sectionKey) {
   const safeId = String(o.id).replace(/[^a-zA-Z0-9]/g,'_');
   const secAttr = sectionKey ? ` data-section="${sectionKey}"` : '';
+  const hm = lineModelIsHandmade(o);
   return `<tr class="tl-row" id="tlrow_${safeId}"${secAttr} onclick="toggleLineDetail('${o.id}')">
     <td class="mono" style="color:var(--muted);font-size:0.75rem"><span class="tl-chevron" id="tlchev_${safeId}">▸</span> ${o.date || '—'}</td>
     <td class="mono">${o.order}</td>
     <td class="mono">×${o.qty}</td>
-    <td><strong>${o.model}</strong>${o.custom?' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>':''}</td>
+    <td><strong${hm ? ' style="color:var(--green)"' : ''}>${o.model}</strong>${o.custom?' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>':''}</td>
     <td>${lineColorTag(o)}</td>
     <td class="mono">${o.etn ? (o.etnSize || 'ETN') : '—'}</td>
   </tr>
