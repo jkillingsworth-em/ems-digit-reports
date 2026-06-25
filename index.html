@@ -1253,6 +1253,8 @@ function renderPickerSummaryLive(o, key) {
 
 function renderPickerSummary(o) {
   const key = o.id;
+  const cd = customData[key];
+  if (!cd?.digits?.some(d=>d.qty>0)) return '<span style="color:var(--muted);font-size:0.78rem">No digits selected yet</span>';
   return `<div style="display:flex;flex-wrap:wrap;gap:6px">
     ${cd.digits.filter(d=>d.qty>0).map(d=>`<div class="hm-chip"><span>${d.desc}</span><span style="color:var(--muted)">×${d.qty}</span><span class="cqty">= ${d.qty*o.qty}</span></div>`).join('')}
   </div>`;
