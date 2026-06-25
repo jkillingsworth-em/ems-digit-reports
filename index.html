@@ -984,18 +984,6 @@ function computeFlags() {
     });
   }
 
-  // 5. Duplicate order numbers across lines (informational)
-  const byOrder = {};
-  orders.forEach(o => { (byOrder[o.order] = byOrder[o.order] || []).push(o); });
-  const dupes = Object.entries(byOrder).filter(([, list]) => list.length > 1);
-  if (dupes.length) {
-    flags.push({
-      sev: 'info', icon: '⧉', title: 'Order # on multiple lines',
-      detail: 'Same order number appears more than once — valid for multi-model orders, but worth a glance.',
-      orders: dupes.map(([num, list]) => ({ order: num, model: list.map(x => x.model).join(' + '), qty: list.reduce((s,x)=>s+x.qty,0) }))
-    });
-  }
-
   return flags;
 }
 
