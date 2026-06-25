@@ -179,7 +179,10 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 
 /* Summary view */
 .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 18px; }
-.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; cursor: pointer; transition: border-color 0.12s, background 0.12s; }
+.stat-card:hover { border-color: var(--accent); background: var(--surface2); }
+.stat-card.disabled { cursor: default; }
+.stat-card.disabled:hover { border-color: var(--border); background: var(--surface); }
 .stat-card .num { font-family: 'Bebas Neue', sans-serif; font-size: 2.2rem; color: var(--accent); line-height: 1; }
 .stat-card .lbl { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
 
@@ -730,6 +733,13 @@ let currentOrderIdx = -1;
 let lineListingRows = [];
 let lineSort = { key: 'group', dir: 'asc' }; // default: outdoor group then indoor
 
+// Filtered Prev/Next navigation context. When set, the Order Detail view's Prev/Next
+// buttons step through navContext.ids (order ids, in order) instead of the full pool —
+// e.g. clicking "Outdoor Amber" on a stat card, or a specific digit type under Digit
+// Totals, opens the first matching order with Prev/Next scoped to just that group.
+// null = default behavior (step through the entire pool/run).
+let navContext = null; // { label: string, ids: string[] }
+
 // ── PRODUCTION RUN / POOL STATE ──────────────────────────────────────────────
 // Each order in `orders` is the master POOL. runStatus tracks production-run state:
 //   'in_run'  — matched on production list, building now
@@ -1101,11 +1111,22 @@ function showView(view) {
   }
 }
 
-function selectOrder(i) {
+function selectOrder(i, keepContext) {
+  if (!keepContext) navContext = null;
   currentOrderIdx = i;
   currentView = 'order';
   ['summaryBtn','handmadeBtn'].forEach(id => document.getElementById(id)?.classList.remove('active'));
   renderOrderDetail(i);
+}
+
+// Enter a filtered Prev/Next context (from a stat card or digit-total cell) and jump
+// to the first matching order. ids = array of order ids defining the navigable set.
+function enterNavContext(label, ids) {
+  if (!ids.length) return;
+  navContext = { label, ids };
+  const idx = orders.findIndex(o => o.id === ids[0]);
+  if (idx < 0) return;
+  selectOrder(idx, true);
 }
 
 // ── ORDER DETAIL ─────────────────────────────────────────────────────────────
@@ -1152,15 +1173,37 @@ function renderOrderDetail(i) {
       `<div class="etn-stat"><div class="label">Half ETN</div><div class="value">${etn.half_size} × ${etn.half_qty}</div></div>` : '<div></div>'}
   </div></div>` : '';
 
+  // Prev/Next: step through the active filtered context (e.g. "Outdoor Amber") if
+  // one is set, otherwise step through the full pool as before.
+  let prevBtn = '', nextBtn = '', contextLabel = '';
+  if (navContext) {
+    const pos = navContext.ids.indexOf(o.id);
+    if (pos >= 0) {
+      contextLabel = `<div class="view-sub" style="margin-top:3px;color:var(--accent)">${navContext.label} · ${pos+1} of ${navContext.ids.length} <button class="flag-jump" style="margin-left:6px" onclick="navContext=null; selectOrder(${i});">✕ Exit filter</button></div>`;
+      if (pos > 0) {
+        const prevIdx = orders.findIndex(x => x.id === navContext.ids[pos-1]);
+        if (prevIdx >= 0) prevBtn = `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${prevIdx}, true)">← Prev</button>`;
+      }
+      if (pos < navContext.ids.length - 1) {
+        const nextIdx = orders.findIndex(x => x.id === navContext.ids[pos+1]);
+        if (nextIdx >= 0) nextBtn = `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${nextIdx}, true)">Next →</button>`;
+      }
+    }
+  } else {
+    if (i > 0) prevBtn = `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${i-1})">← Prev</button>`;
+    if (i < orders.length-1) nextBtn = `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${i+1})">Next →</button>`;
+  }
+
   document.getElementById('content').innerHTML = `
     <div class="view-header">
       <div>
         <div class="view-title" style="${colorStyle}">${o.model}</div>
         <div class="view-sub">Order #${o.order} · <span style="${colorStyle}">${colorLabel}</span> · ×${o.qty}${o.etn ? ' · <span style="color:var(--blue)">ETN '+o.etnSize+'</span>' : ''}</div>
+        ${contextLabel}
       </div>
       <div class="nav-btns">
-        ${i > 0 ? `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${i-1})">← Prev</button>` : ''}
-        ${i < orders.length-1 ? `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${i+1})">Next →</button>` : ''}
+        ${prevBtn}
+        ${nextBtn}
       </div>
     </div>
     ${digitSection}
@@ -1372,6 +1415,23 @@ function computeTotals() {
   return { amber, red, indoor };
 }
 
+// Finds every order (within the active set) contributing a given digit type to a given
+// color section (amber/red/indoor) — used to scope Prev/Next when a Digit Totals cell
+// is clicked. Mirrors the same matching logic as computeTotals above.
+function ordersForDigit(sectionKey, digitName) {
+  return activeOrders().filter(o => {
+    const ind = isIndoor(o.model);
+    const section = ind ? 'indoor' : (o.color === 'RED' ? 'red' : 'amber');
+    if (section !== sectionKey) return false;
+    if (isCustom(o.model)) {
+      const cd = customData[o.id];
+      return !!cd?.digits?.some(d => d.desc === digitName && d.qty > 0);
+    }
+    const digits = getDigits(o.model);
+    return !!digits?.some(d => d.digit === digitName);
+  }).map(o => o.id);
+}
+
 // ── LINE LISTING (sortable) ───────────────────────────────────────────────────
 function lineColorTag(o) {
   if (o.color === 'AMBER') return '<span class="color-tag amber">AMBER</span>';
@@ -1570,6 +1630,20 @@ function buildDigitDetailHtml(standardItems, handmadeItems, orderQty, getName, g
   return `<div class="tl-detail-panel">${standardHtml}${handmadeHtml}</div>`;
 }
 
+// Builds one clickable summary stat card. Clicking opens the Order Detail view for the
+// first matching order with Prev/Next scoped to just this filtered group (ids). Cards
+// with no matching orders render disabled (no click, no hover highlight).
+function statCardHtml(num, color, label, ids) {
+  const safeLabel = label.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const colorStyle = color ? ` style="color:${color}"` : '';
+  if (!ids.length) {
+    return `<div class="stat-card disabled"><div class="num"${colorStyle}>${num}</div><div class="lbl">${label}</div></div>`;
+  }
+  return `<div class="stat-card" onclick='enterNavContext("${safeLabel}", ${JSON.stringify(ids)})'>
+    <div class="num"${colorStyle}>${num}</div><div class="lbl">${label}</div>
+  </div>`;
+}
+
 function renderSummary() {
   const view = activeOrders();
   const { amber, red, indoor } = computeTotals();
@@ -1595,8 +1669,16 @@ function renderSummary() {
     // Standard digits first (alpha), then handmade digits (alpha) at the bottom
     const standard = all.filter(([d]) => !isHmDigit(d)).sort((a,b)=>a[0].localeCompare(b[0]));
     const handmade = all.filter(([d]) =>  isHmDigit(d)).sort((a,b)=>a[0].localeCompare(b[0]));
-    const stdRows = standard.map(([d,q])=>`<tr><td>${d}</td><td class="${qtyClass}">${Math.round(q)}</td></tr>`).join('');
-    const hmRows  = handmade.map(([d,q])=>`<tr class="dg-hm-row"><td>${d} <span class="dg-hm-tag">IN-HOUSE</span></td><td class="${qtyClass}">${Math.round(q)}</td></tr>`).join('');
+    const digitRow = (d, q, hm) => {
+      const ids = ordersForDigit(cls, d);
+      const label = (`${title} — ${d}`).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      const onclick = ids.length ? ` onclick='enterNavContext("${label}", ${JSON.stringify(ids)})'` : '';
+      const rowClass = hm ? ' class="dg-hm-row"' : '';
+      const nameCell = hm ? `${d} <span class="dg-hm-tag">IN-HOUSE</span>` : d;
+      return `<tr${rowClass}${onclick}><td>${nameCell}</td><td class="${qtyClass}">${Math.round(q)}</td></tr>`;
+    };
+    const stdRows = standard.map(([d,q])=>digitRow(d, q, false)).join('');
+    const hmRows  = handmade.map(([d,q])=>digitRow(d, q, true)).join('');
     const divider = (standard.length && handmade.length) ? `<tr class="dg-divider"><td colspan="2">In-House Digits</td></tr>` : '';
     return `<div class="dg-col-panel"><div class="dg-col-header ${cls}">${title}</div>
       <table class="dg-table"><tbody>
@@ -1727,11 +1809,11 @@ function renderSummary() {
     ${customPending>0 ? `<div class="alert alert-warn">⚠ ${customPending} CUSTOM order(s) have no digit data entered yet — totals are incomplete.</div>` : ''}
     ${etnNoSize>0 ? `<div class="alert alert-warn">⚠ ${etnNoSize} ETN order(s) flagged but missing a panel size — verify from paperwork.</div>` : ''}
     <div class="summary-grid">
-      <div class="stat-card"><div class="num">${outdoorCount+indoorCount}</div><div class="lbl">${totalsView==='pool'?'Pool Boards':'Boards This Run'}</div></div>
-      <div class="stat-card"><div class="num" style="color:var(--amber)">${amberCount}</div><div class="lbl">Outdoor Amber</div></div>
-      <div class="stat-card"><div class="num" style="color:var(--red)">${redCount}</div><div class="lbl">Outdoor Red</div></div>
-      <div class="stat-card"><div class="num" style="color:var(--blue)">${indoorCount}</div><div class="lbl">Indoor</div></div>
-      <div class="stat-card"><div class="num" style="color:#3b82f6">${etnCount}</div><div class="lbl">ETN Boards</div></div>
+      ${statCardHtml(outdoorCount+indoorCount, '', totalsView==='pool'?'Pool Boards':'Boards This Run', view.map(o=>o.id))}
+      ${statCardHtml(amberCount, 'var(--amber)', 'Outdoor Amber', view.filter(o=>o.color==='AMBER' && !isIndoor(o.model)).map(o=>o.id))}
+      ${statCardHtml(redCount, 'var(--red)', 'Outdoor Red', view.filter(o=>o.color==='RED' && !isIndoor(o.model)).map(o=>o.id))}
+      ${statCardHtml(indoorCount, 'var(--blue)', 'Indoor', view.filter(o=>isIndoor(o.model)).map(o=>o.id))}
+      ${statCardHtml(etnCount, '#3b82f6', 'ETN Boards', view.filter(o=>o.etn).map(o=>o.id))}
     </div>
     <div class="section-label-lg">Digit Totals</div>
     <div class="dg-columns">
