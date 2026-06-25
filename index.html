@@ -321,14 +321,35 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 .tl-row.tl-row-open td { background: rgba(240,165,0,0.05); }
 .tl-chevron { display: inline-block; width: 9px; color: var(--accent); font-size: 0.7rem; transition: transform 0.12s; }
 .tl-detail-row td { padding: 0; border-bottom: 1px solid rgba(42,48,69,0.4); }
-.tl-detail-chips {
-  display: flex; flex-wrap: wrap; gap: 6px;
-  padding: 10px 14px 12px 30px; background: rgba(255,255,255,0.012);
-}
+.tl-detail-panel { padding: 10px 14px 12px 30px; background: rgba(255,255,255,0.012); }
 .tl-detail-empty {
   padding: 10px 14px 12px 30px; color: var(--muted); font-size: 0.78rem;
   background: rgba(255,255,255,0.012); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
+.tl-digit-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tl-digit-row + .tl-digit-group { margin-top: 9px; }
+.tl-digit-group {
+  border-top: 1px dashed rgba(46,204,113,0.25); padding-top: 8px; margin-top: 4px;
+}
+.tl-digit-group-label {
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--green); font-weight: 700; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 5px;
+}
+.tl-digit-group-label::before { content: '●'; font-size: 0.55rem; }
+.tl-chip {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 5px; padding: 4px 6px 4px 10px; font-size: 0.78rem;
+  font-family: 'IBM Plex Mono', monospace; display: flex; align-items: center; gap: 7px;
+}
+.tl-chip .tl-chip-name { font-weight: 600; }
+.tl-chip .tl-chip-qty {
+  color: #000; background: var(--accent); font-weight: 700;
+  border-radius: 3px; padding: 1px 6px; font-size: 0.74rem;
+}
+.tl-chip-hm { background: rgba(46,204,113,0.07); border-color: rgba(46,204,113,0.35); }
+.tl-chip-hm .tl-chip-name { color: var(--green); }
+.tl-chip-hm .tl-chip-qty { background: var(--green); }
 
 .parse-info { font-size: 0.7rem; color: var(--muted); font-family: 'IBM Plex Mono', monospace; padding: 6px 16px; border-top: 1px solid var(--border); }
 .sidebar-footer { padding: 8px 16px; border-top: 1px solid var(--border); display: flex; gap: 6px; }
@@ -1481,10 +1502,15 @@ function renderLineDigitDetail(o) {
       const idx = orders.findIndex(x => x.id === o.id);
       return `<div class="tl-detail-empty">No digits entered yet for this CUSTOM order. <button class="flag-jump" onclick="event.stopPropagation(); selectOrder(${idx})">Enter digits →</button></div>`;
     }
-    const chips = cd.digits.filter(d => d.qty > 0)
-      .map(d => `<div class="hm-chip"><span>${d.desc}</span><span style="color:var(--muted)">×${d.qty}</span><span class="cqty">= ${d.qty * o.qty}</span></div>`)
-      .join('');
-    return `<div class="tl-detail-chips">${chips}</div>`;
+    // Custom digit picker already separates standard vs. in-house items into
+    // DB.custom_outdoor_handmade / DB.custom_indoor_handmade lists — reuse those
+    // to group the same way as standard models below.
+    const ind = isIndoor(o.model);
+    const hmNames = new Set(ind ? DB.custom_indoor_handmade : DB.custom_outdoor_handmade);
+    const entries = cd.digits.filter(d => d.qty > 0);
+    const standard = entries.filter(d => !hmNames.has(d.desc));
+    const handmade = entries.filter(d =>  hmNames.has(d.desc));
+    return buildDigitDetailHtml(standard, handmade, o.qty, d => d.desc, d => d.qty);
   }
 
   const digits = getDigits(o.model);
@@ -1494,15 +1520,36 @@ function renderLineDigitDetail(o) {
 
   const hmDigits = hmOutdoorDigits[o.model] || hmIndoorDigits[o.model] || [];
   const hmSet = new Set(hmDigits.map(d => d.digit));
-  const chips = digits.map(d => {
-    const isHM = hmSet.has(d.digit);
-    const total = Math.round(d.qty * o.qty);
-    return `<div class="hm-chip"${isHM ? ' style="border-color:rgba(46,204,113,0.3)"' : ''}>
-      <span${isHM ? ' style="color:var(--green);font-weight:600"' : ''}>${d.digit}${isHM ? ' <span style="font-size:0.6rem;opacity:0.7">IN-HOUSE</span>' : ''}</span>
-      <span class="cqty">= ${total}</span>
+  const standard = digits.filter(d => !hmSet.has(d.digit));
+  const handmade = digits.filter(d =>  hmSet.has(d.digit));
+  return buildDigitDetailHtml(standard, handmade, o.qty, d => d.digit, d => d.qty);
+}
+
+// Shared chip-group builder for the line-listing expand panel. Standard digits
+// render first as plain chips; handmade/in-house digits (if any) render below a
+// labeled divider in green so they're unmistakable regardless of how many chips
+// are on screen — matches the same standard/in-house split used in Digit Totals.
+function buildDigitDetailHtml(standardItems, handmadeItems, orderQty, getName, getPerUnitQty) {
+  const chip = (item, isHm) => {
+    const total = Math.round(getPerUnitQty(item) * orderQty);
+    return `<div class="tl-chip${isHm ? ' tl-chip-hm' : ''}">
+      <span class="tl-chip-name">${getName(item)}</span>
+      <span class="tl-chip-qty">${total}</span>
     </div>`;
-  }).join('');
-  return `<div class="tl-detail-chips">${chips}</div>`;
+  };
+
+  const standardHtml = standardItems.length
+    ? `<div class="tl-digit-row">${standardItems.map(d => chip(d, false)).join('')}</div>`
+    : '';
+
+  const handmadeHtml = handmadeItems.length
+    ? `<div class="tl-digit-group">
+        <div class="tl-digit-group-label">In-House Digits</div>
+        <div class="tl-digit-row">${handmadeItems.map(d => chip(d, true)).join('')}</div>
+      </div>`
+    : '';
+
+  return `<div class="tl-detail-panel">${standardHtml}${handmadeHtml}</div>`;
 }
 
 function renderSummary() {
