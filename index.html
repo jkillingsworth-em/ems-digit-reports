@@ -952,6 +952,11 @@ function clearAll() {
   document.getElementById('content').innerHTML = '<div class="empty-state"><p>All cleared.</p></div>';
   document.getElementById('parseInfo').textContent = '';
   const pi = document.getElementById('prodInfo'); if (pi) pi.textContent='';
+  // Also reset the truck-list week fields and header label — these aren't part of
+  // the pool/run state but should clear alongside it so stale dates don't linger.
+  const d1 = document.getElementById('date1'), d2 = document.getElementById('date2'), dn = document.getElementById('dateNote');
+  if (d1) d1.value = ''; if (d2) d2.value = ''; if (dn) dn.value = '';
+  updateWeekLabel();
 }
 
 // ── ORDER LIST ───────────────────────────────────────────────────────────────
