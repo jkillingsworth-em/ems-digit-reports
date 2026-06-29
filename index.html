@@ -832,7 +832,7 @@ function hasHandmadeDigits(model) {
 // include at least one in-house item (custom orders don't have a fixed model-level
 // handmade flag — it depends entirely on what was picked).
 function lineModelIsHandmade(o) {
-  if (o.custom) {
+  if (isCustom(o.model)) {
     const cd = customData[o.id];
     if (!cd?.digits?.length) return false;
     const ind = isIndoor(o.model);
@@ -1831,7 +1831,7 @@ function renderSummary() {
 function renderHandmade() {
   const view = activeOrders();
   const hmOrders = view.filter(o => {
-    if (isCustom(o.model)) return false;
+    if (isCustom(o.model)) return lineModelIsHandmade(o); // custom order: only if saved digits include an in-house item
     return hmOutdoor.has(o.model) || hmIndoor.has(o.model);
   });
 
@@ -1846,6 +1846,15 @@ function renderHandmade() {
   hmOrders.forEach(o => {
     const ind = isIndoor(o.model);
     const map = ind ? indoor : (o.color === 'RED' ? red : amber);
+    if (isCustom(o.model)) {
+      // Custom order: pull only the in-house items from what was actually saved for this order.
+      const cd = customData[o.id];
+      const hmNames = new Set(ind ? DB.custom_indoor_handmade : DB.custom_outdoor_handmade);
+      (cd?.digits || []).forEach(d => {
+        if (d.qty > 0 && hmNames.has(d.desc)) map[d.desc] = (map[d.desc] || 0) + d.qty * o.qty;
+      });
+      return;
+    }
     const hmDigits = hmOutdoorDigits[o.model] || hmIndoorDigits[o.model] || [];
     hmDigits.forEach(d => {
       map[d.digit] = (map[d.digit] || 0) + d.qty * o.qty;
