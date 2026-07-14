@@ -866,7 +866,7 @@ function hasOverride(o) { return !!overrides[o.id]; }
 // Seed rows for the editor: the model's sheet digits, each pre-colored with the
 // order's color (RED for a MIXED outdoor board — flip the exceptions from there).
 function seedOverrideRows(o) {
-  const ind = isIndoor(o.model);
+  const ind = isIndoor(o.model);   // model-table truth: can this board take colored digits at all?
   const defColor = ind ? '' : (o.color === 'AMBER' ? 'AMBER' : 'RED');
   if (isCustom(o.model)) {
     const cd = customData[o.id];
@@ -874,6 +874,27 @@ function seedOverrideRows(o) {
   }
   const digits = getDigits(o.model) || [];
   return digits.map(d => ({ item: d.digit, qty: d.qty, color: defColor }));
+}
+
+// ── AUTHORITATIVE BOARD CLASSIFICATION ───────────────────────────────────────
+// Every color/indoor decision in the app routes through these two. An override
+// supplies the board its identity: if its rows carry RED/AMBER, the board is
+// OUTDOOR in that color (or MIXED if both), no matter what the paste line said.
+// Without an override these fall straight back to the original rules, unchanged.
+function orderColor(o) {
+  const ov = overrides[o.id];
+  if (ov) {
+    const cols = new Set(ov.digits.filter(d => d.qty > 0).map(d => d.color).filter(c => c === 'RED' || c === 'AMBER'));
+    if (cols.size > 1) return 'MIXED';
+    if (cols.size === 1) return [...cols][0];
+    return '';   // all rows uncolored -> indoor board
+  }
+  return o.color || '';
+}
+function orderIsIndoor(o) {
+  const c = orderColor(o);
+  if (c === 'RED' || c === 'AMBER' || c === 'MIXED') return false;  // a colored board is outdoor, period
+  return isIndoor(o.model);
 }
 
 // Digit list the rest of the app should use for an order: override wins, else sheet.
@@ -1087,7 +1108,8 @@ function computeFlags() {
   // 3. Orders with no color set on an outdoor-data model
   const noColor = orders.filter(o => {
     if (isCustom(o.model)) return false;
-    if (isMixed(o)) return false;  // handled by the mixed-color flag above
+    if (isMixed(o)) return false;      // handled by the mixed-color flag above
+    if (hasOverride(o)) return false;  // the override supplies the color
     if (o.color === 'AMBER' || o.color === 'RED') return false;
     // Blank color but the model lives in the OUTDOOR table → ambiguous
     return !!DB.outdoor_digits[o.model] && !DB.indoor_digits[o.model];
@@ -1192,10 +1214,11 @@ function selectOrder(i) {
 // ── ORDER DETAIL ─────────────────────────────────────────────────────────────
 function renderOrderDetail(i) {
   const o = orders[i];
-  const ind = isIndoor(o.model);
+  const ind = orderIsIndoor(o);
   const cust = isCustom(o.model);
-  const colorLabel = o.color ? o.color + ' DIGITS' : 'INDOOR';
-  const colorStyle = o.color === 'AMBER' ? 'color:var(--amber)' : o.color === 'RED' ? 'color:var(--red)' : 'color:var(--blue)';
+  const eff = orderColor(o);
+  const colorLabel = eff === 'MIXED' ? 'MIXED DIGITS' : (eff ? eff + ' DIGITS' : 'INDOOR');
+  const colorStyle = eff === 'AMBER' ? 'color:var(--amber)' : eff === 'RED' ? 'color:var(--red)' : eff === 'MIXED' ? 'color:var(--accent2)' : 'color:var(--blue)';
   const etn = o.etn ? getETN(o.model) : null;
 
   let digitSection = '';
@@ -1250,7 +1273,7 @@ function renderOrderDetail(i) {
     <div class="view-header">
       <div>
         <div class="view-title" style="${colorStyle}">${o.model}</div>
-        <div class="view-sub">Order #${o.order} · <span style="${colorStyle}">${colorLabel}</span> · ×${o.qty}${o.etn ? ' · <span style="color:var(--blue)">ETN '+o.etnSize+'</span>' : ''}</div>
+        <div class="view-sub">Order #${o.order} · <span style="${colorStyle}">${colorLabel}</span> · ×${o.qty}${hasOverride(o) ? ' · <span class="color-tag override">OVERRIDE</span>' : ''}${o.etn ? ' · <span style="color:var(--blue)">ETN '+o.etnSize+'</span>' : ''}</div>
       </div>
       <div class="nav-btns">
         ${i > 0 ? `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${i-1})">← Prev</button>` : ''}
@@ -1343,7 +1366,8 @@ function revertOverride(id) {
 }
 
 function renderOverrideEditor(o) {
-  const ind = isIndoor(o.model);
+  const ind = isIndoor(o.model);   // model-table truth — an outdoor model always gets color selects,
+                                   // even if the paste line's COLOR was blank
   const saved = overrides[o.id];
   const colorSel = (i, val) => ind
     ? `<span style="font-size:0.7rem;color:var(--blue);font-family:'IBM Plex Mono',monospace">INDOOR</span>`
@@ -1601,9 +1625,9 @@ function computeTotals() {
   const addTo = (map, digit, qty) => { map[digit] = (map[digit]||0) + qty; };
 
   activeOrders().forEach(o => {
-    const ind = isIndoor(o.model);
+    const ind = orderIsIndoor(o);
     const cust = isCustom(o.model);
-    const map = ind ? indoor : (o.color==='RED' ? red : amber);
+    const map = ind ? indoor : (orderColor(o)==='RED' ? red : amber);
 
     // OVERRIDE PATH — the only new branch. Each digit row carries its own color,
     // so one order can feed both the RED and AMBER columns. Indoor models ignore
@@ -1641,9 +1665,10 @@ function computeTotals() {
 
 // ── LINE LISTING (sortable) ───────────────────────────────────────────────────
 function lineColorTag(o) {
-  if (o.color === 'MIXED') return '<span class="color-tag mixed">MIXED</span>';
-  if (o.color === 'AMBER') return '<span class="color-tag amber">AMBER</span>';
-  if (o.color === 'RED')   return '<span class="color-tag red">RED</span>';
+  const c = o.effColor !== undefined ? o.effColor : orderColor(o);
+  if (c === 'MIXED') return '<span class="color-tag mixed">MIXED</span>';
+  if (c === 'AMBER') return '<span class="color-tag amber">AMBER</span>';
+  if (c === 'RED')   return '<span class="color-tag red">RED</span>';
   return '<span class="color-tag indoor">INDOOR</span>';
 }
 
@@ -1864,12 +1889,12 @@ function buildDigitDetailHtml(standardItems, handmadeItems, orderQty, getName, g
 function renderSummary() {
   const view = activeOrders();
   const { amber, red, indoor } = computeTotals();
-  const outdoorCount = view.filter(o => !isIndoor(o.model)).reduce((s,o)=>s+o.qty,0);
-  const indoorCount  = view.filter(o =>  isIndoor(o.model)).reduce((s,o)=>s+o.qty,0);
-  const amberCount   = view.filter(o => o.color==='AMBER').reduce((s,o)=>s+o.qty,0);
-  const redCount     = view.filter(o => o.color==='RED').reduce((s,o)=>s+o.qty,0);
+  const outdoorCount = view.filter(o => !orderIsIndoor(o)).reduce((s,o)=>s+o.qty,0);
+  const indoorCount  = view.filter(o =>  orderIsIndoor(o)).reduce((s,o)=>s+o.qty,0);
+  const amberCount   = view.filter(o => orderColor(o)==='AMBER').reduce((s,o)=>s+o.qty,0);
+  const redCount     = view.filter(o => orderColor(o)==='RED').reduce((s,o)=>s+o.qty,0);
   const etnCount     = view.filter(o => o.etn).reduce((s,o)=>s+o.qty,0);
-  const mixedCount   = view.filter(o => isMixed(o)).reduce((s,o)=>s+o.qty,0);
+  const mixedCount   = view.filter(o => orderColor(o)==='MIXED').reduce((s,o)=>s+o.qty,0);
   const customPending= view.filter(o => isCustom(o.model) && !customData[o.id] && !hasOverride(o)).length;
   const etnNoSize    = view.filter(o => o.etn && !o.etnSize && !isCustom(o.model)).length;
   const mixedPending = view.filter(o => isMixed(o) && !hasOverride(o)).length;
@@ -1903,17 +1928,19 @@ function renderSummary() {
   // ── Order line listing (sortable) ──
   // Store all rows globally so header clicks can re-sort without recomputing the report
   lineListingRows = view.map(o => ({
-    id: o.id, date: o.date || '', order: o.order, qty: o.qty, model: o.model, color: o.color,
+    id: o.id, date: o.date || '', order: o.order, qty: o.qty, model: o.model,
+    color: orderColor(o), effColor: orderColor(o),
     etn: o.etn, etnSize: o.etnSize,
-    indoor: isIndoor(o.model), custom: isCustom(o.model), override: hasOverride(o)
+    indoor: orderIsIndoor(o), custom: isCustom(o.model), override: hasOverride(o)
   }));
   const lineTable = renderLineListing();
 
   // ── ETN section ──
   const colorTag = o => {
-    if (o.color === 'MIXED') return '<span class="color-tag mixed">MIXED</span>';
-    if (o.color === 'AMBER') return '<span class="color-tag amber">AMBER</span>';
-    if (o.color === 'RED')   return '<span class="color-tag red">RED</span>';
+    const c = orderColor(o);
+    if (c === 'MIXED') return '<span class="color-tag mixed">MIXED</span>';
+    if (c === 'AMBER') return '<span class="color-tag amber">AMBER</span>';
+    if (c === 'RED')   return '<span class="color-tag red">RED</span>';
     return '<span class="color-tag indoor">INDOOR</span>';
   };
   const etnOrders = view.filter(o => o.etn);
@@ -2064,8 +2091,8 @@ function renderHandmade() {
   // Aggregate handmade digits the same way Digit Totals does: AMBER / RED / INDOOR maps
   const amber = {}, red = {}, indoor = {};
   hmOrders.forEach(o => {
-    const ind = isIndoor(o.model);
-    const map = ind ? indoor : (o.color === 'RED' ? red : amber);
+    const ind = orderIsIndoor(o);
+    const map = ind ? indoor : (orderColor(o) === 'RED' ? red : amber);
     const hmDigits = hmOutdoorDigits[o.model] || hmIndoorDigits[o.model] || [];
 
     // Overridden order: take the in-house rows from the override (each carries its
