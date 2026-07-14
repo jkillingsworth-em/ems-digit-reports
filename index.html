@@ -145,9 +145,9 @@ header span { font-family: 'IBM Plex Mono', monospace; color: var(--muted); font
 
 table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 th {
-  font-family: 'IBM Plex Mono', monospace; font-size: 0.74rem;
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
   letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted);
-  text-align: left; padding: 8px 9px; border-bottom: 1px solid var(--border);
+  text-align: left; padding: 5px 9px; border-bottom: 1px solid var(--border);
 }
 td { padding: 6px 9px; border-bottom: 1px solid rgba(42,48,69,0.4); vertical-align: middle; }
 tr:last-child td { border-bottom: none; }
@@ -179,10 +179,7 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 
 /* Summary view */
 .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 18px; }
-.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; cursor: pointer; transition: border-color 0.12s, background 0.12s; }
-.stat-card:hover { border-color: var(--accent); background: var(--surface2); }
-.stat-card.disabled { cursor: default; }
-.stat-card.disabled:hover { border-color: var(--border); background: var(--surface); }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
 .stat-card .num { font-family: 'Bebas Neue', sans-serif; font-size: 2.2rem; color: var(--accent); line-height: 1; }
 .stat-card .lbl { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
 
@@ -290,9 +287,9 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 }
 .tl-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
 .tl-table th {
-  font-family: 'IBM Plex Mono', monospace; font-size: 0.74rem; letter-spacing: 1.5px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; letter-spacing: 1.5px;
   text-transform: uppercase; color: var(--muted); text-align: left;
-  padding: 9px 10px; border-bottom: 1px solid var(--border); background: var(--surface2);
+  padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface2);
 }
 .tl-table td { padding: 6px 10px; border-bottom: 1px solid rgba(42,48,69,0.4); }
 .tl-table tr:hover td { background: rgba(255,255,255,0.018); }
@@ -302,14 +299,13 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 .th-sort.th-active { color: var(--accent); }
 .tl-section-row td {
   background: var(--surface2); font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.9rem; letter-spacing: 2.5px; text-transform: uppercase; color: var(--accent); font-weight: 700;
-  display: flex; align-items: center; gap: 10px; padding: 12px 10px;
-  border-top: 2px solid var(--border); border-bottom: 2px solid var(--border);
+  font-size: 0.62rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
 }
 .tl-section-toggle {
   background: var(--surface); border: 1px solid var(--border); color: var(--accent);
-  border-radius: 4px; width: 26px; height: 26px; line-height: 1; cursor: pointer;
-  font-family: 'IBM Plex Mono', monospace; font-size: 1.05rem; font-weight: 700;
+  border-radius: 3px; width: 18px; height: 18px; line-height: 1; cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 700;
   display: inline-flex; align-items: center; justify-content: center; padding: 0;
   flex-shrink: 0; transition: all 0.12s;
 }
@@ -318,7 +314,40 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 .color-tag.amber { background: rgba(245,158,11,0.15); color: var(--amber); }
 .color-tag.red { background: rgba(231,76,60,0.15); color: var(--red); }
 .color-tag.indoor { background: rgba(59,130,246,0.15); color: var(--blue); }
+.color-tag.mixed { background: linear-gradient(90deg, rgba(231,76,60,0.18), rgba(245,158,11,0.18)); color: var(--accent2); }
+.color-tag.override { background: rgba(139,92,246,0.16); color: #8b5cf6; }
 .tl-card { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; overflow: hidden; margin-bottom: 12px; }
+
+/* ── Digit override editor (per-order) ── */
+.ov-row {
+  display: grid; grid-template-columns: 1fr 80px 108px 30px; gap: 8px; align-items: center;
+  padding: 6px 12px; border-bottom: 1px solid var(--border); border-left: 3px solid transparent;
+}
+.ov-row:hover { background: var(--surface2); }
+.ov-row-red   { border-left-color: var(--red); }
+.ov-row-amber { border-left-color: var(--amber); }
+.ov-row-name  { font-size: 0.8rem; }
+.ov-row-new .ov-row-name::after {
+  content: 'ADDED'; margin-left: 6px; font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.58rem; letter-spacing: 1px; color: var(--green); opacity: 0.85;
+}
+.ov-input, .ov-select {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  border-radius: 4px; padding: 4px 6px; font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; width: 100%;
+}
+.ov-del {
+  background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 4px;
+  cursor: pointer; width: 26px; height: 26px; line-height: 1; padding: 0; font-size: 0.85rem;
+}
+.ov-del:hover { border-color: var(--red); color: var(--red); }
+.ov-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.ov-head-labels {
+  display: grid; grid-template-columns: 1fr 80px 108px 30px; gap: 8px;
+  padding: 6px 12px; background: var(--surface2);
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--muted);
+}
+@media print { .ov-bar, .ov-del { display: none !important; } }
 
 /* Expandable order-line rows (digit drill-down) */
 .tl-row { cursor: pointer; }
@@ -728,17 +757,23 @@ function getWeekLabel() {
 // ── STATE ────────────────────────────────────────────────────────────────────
 let orders = [];
 let customData = {};   // { orderNum: { digits: [{desc, qty}] } }
+
+// ── DIGIT OVERRIDE LAYER ─────────────────────────────────────────────────────
+// Additive only. { [order.id]: { digits: [{item, qty, color}], note, savedAt } }
+// An order WITHOUT an entry here behaves exactly as before — the model's digit
+// list from the Google Sheet drives everything. An order WITH an entry bypasses
+// the sheet for that order only, and each digit row carries its OWN color, which
+// is what makes a mixed-color outdoor board (e.g. "score digits AMBER, all other
+// digits RED") representable. The sheet is never written to; overrides are marked
+// on-screen and in print so a deviation from spec is always visible.
+// color: 'RED' | 'AMBER' | '' (ignored for indoor models — all rows go to INDOOR)
+let overrides = {};
+let overrideEditing = null;   // order.id currently open in the editor (transient, not persisted)
+
 let currentView = 'order'; // 'order' | 'summary' | 'handmade'
 let currentOrderIdx = -1;
 let lineListingRows = [];
 let lineSort = { key: 'group', dir: 'asc' }; // default: outdoor group then indoor
-
-// Filtered Prev/Next navigation context. When set, the Order Detail view's Prev/Next
-// buttons step through navContext.ids (order ids, in order) instead of the full pool —
-// e.g. clicking "Outdoor Amber" on a stat card, or a specific digit type under Digit
-// Totals, opens the first matching order with Prev/Next scoped to just that group.
-// null = default behavior (step through the entire pool/run).
-let navContext = null; // { label: string, ids: string[] }
 
 // ── PRODUCTION RUN / POOL STATE ──────────────────────────────────────────────
 // Each order in `orders` is the master POOL. runStatus tracks production-run state:
@@ -766,7 +801,7 @@ const Persist = {
   save() {
     try {
       const snapshot = {
-        orders, customData, runActive, runLabel, pendingRush, totalsView,
+        orders, customData, overrides, runActive, runLabel, pendingRush, totalsView,
         dates: {
           d1: (document.getElementById('date1')||{}).value || '',
           d2: (document.getElementById('date2')||{}).value || '',
@@ -784,6 +819,7 @@ const Persist = {
       const s = JSON.parse(raw);
       orders      = s.orders || [];
       customData  = s.customData || {};
+      overrides   = s.overrides || {};   // absent in pre-override saves — loads clean
       runActive   = s.runActive || false;
       runLabel    = s.runLabel || '';
       pendingRush = s.pendingRush || [];
@@ -821,25 +857,34 @@ function isIndoor(model) {
   return !!DB.indoor_digits[model];
 }
 function isCustom(model) { return model.startsWith('LXCUSTOM'); }
+
+// ── OVERRIDE HELPERS ─────────────────────────────────────────────────────────
+// MIXED = this order's digits are colored per-row by an override, not by o.color.
+function isMixed(o)     { return o.color === 'MIXED'; }
+function hasOverride(o) { return !!overrides[o.id]; }
+
+// Seed rows for the editor: the model's sheet digits, each pre-colored with the
+// order's color (RED for a MIXED outdoor board — flip the exceptions from there).
+function seedOverrideRows(o) {
+  const ind = isIndoor(o.model);
+  const defColor = ind ? '' : (o.color === 'AMBER' ? 'AMBER' : 'RED');
+  if (isCustom(o.model)) {
+    const cd = customData[o.id];
+    return (cd?.digits || []).filter(d => d.qty > 0).map(d => ({ item: d.desc, qty: d.qty, color: defColor }));
+  }
+  const digits = getDigits(o.model) || [];
+  return digits.map(d => ({ item: d.digit, qty: d.qty, color: defColor }));
+}
+
+// Digit list the rest of the app should use for an order: override wins, else sheet.
+function effectiveDigits(o) {
+  const ov = overrides[o.id];
+  if (ov) return ov.digits.filter(d => d.qty > 0).map(d => ({ item: d.item, qty: d.qty, color: d.color || '' }));
+  return null; // null = no override; caller falls back to its existing path
+}
 function isHandmade(model) { return hmOutdoor.has(model) || hmIndoor.has(model); }
 function hasHandmadeDigits(model) {
   return !!(hmOutdoorDigits[model] || hmIndoorDigits[model]);
-}
-
-// Whether an order line's MODEL cell should render in the handmade/in-house green.
-// Standard models: true if the model has any handmade digit sub-entries at all.
-// Custom orders: true only if the digits actually saved for this specific order
-// include at least one in-house item (custom orders don't have a fixed model-level
-// handmade flag — it depends entirely on what was picked).
-function lineModelIsHandmade(o) {
-  if (isCustom(o.model)) {
-    const cd = customData[o.id];
-    if (!cd?.digits?.length) return false;
-    const ind = isIndoor(o.model);
-    const hmNames = new Set(ind ? DB.custom_indoor_handmade : DB.custom_outdoor_handmade);
-    return cd.digits.some(d => d.qty > 0 && hmNames.has(d.desc));
-  }
-  return hasHandmadeDigits(o.model);
 }
 
 // ── PARSE INPUT ──────────────────────────────────────────────────────────────
@@ -857,6 +902,9 @@ function parseManualInput() {
     const order  = parts[1].replace(/^order[:\s]*/i,'').trim();
     const qty    = parseInt(parts[2]) || 1;
     const model  = parts[3].toUpperCase();
+    // COLOR accepts AMBER | RED | MIXED | blank(indoor). MIXED means the board
+    // carries both digit colors (rare — per LINE SPEC) and MUST be resolved with a
+    // per-digit override; it is flagged until one is saved.
     const color  = (parts[4] || '').toUpperCase();
     const etnRaw = (parts[5] || '').toUpperCase();
     const etnSize = (parts[6] || '').toUpperCase();
@@ -986,8 +1034,8 @@ function activeOrders() {
 
 // ── CLEAR ────────────────────────────────────────────────────────────────────
 function clearAll() {
-  if (!confirm('Clear all orders, the pool, and any production run? This cannot be undone.')) return;
-  orders = []; customData = {}; currentOrderIdx = -1;
+  if (!confirm('Clear all orders, the pool, any production run, and all digit overrides? This cannot be undone.')) return;
+  orders = []; customData = {}; overrides = {}; overrideEditing = null; currentOrderIdx = -1;
   runActive = false; runLabel=''; pendingRush=[]; totalsView='run';
   Persist.clear();
   renderOrderList();
@@ -1026,9 +1074,20 @@ function computeFlags() {
     });
   }
 
+  // 2b. MIXED-color boards with no override saved yet — totals are incomplete
+  const mixedPending = orders.filter(o => isMixed(o) && !hasOverride(o));
+  if (mixedPending.length) {
+    flags.push({
+      sev: 'high', icon: '🎨', title: 'Mixed-color board needs digit override',
+      detail: 'These boards carry both RED and AMBER digits per the LINE SPEC. Open each one and set the color on every digit row — they contribute nothing to the totals until you do.',
+      orders: mixedPending, jumpToOrder: true
+    });
+  }
+
   // 3. Orders with no color set on an outdoor-data model
   const noColor = orders.filter(o => {
     if (isCustom(o.model)) return false;
+    if (isMixed(o)) return false;  // handled by the mixed-color flag above
     if (o.color === 'AMBER' || o.color === 'RED') return false;
     // Blank color but the model lives in the OUTDOOR table → ambiguous
     return !!DB.outdoor_digits[o.model] && !DB.indoor_digits[o.model];
@@ -1048,6 +1107,18 @@ function computeFlags() {
       sev: 'med', icon: '📐', title: 'ETN upgrade, no panel size',
       detail: 'ETN is flagged but no panel size was captured. Confirm the size from the PDF.',
       orders: etnNoSize
+    });
+  }
+
+  // 5. Audit trail — any order whose digits deviate from the Google Sheet spec.
+  //    Informational (never counted as an issue) but always visible: an overridden
+  //    order must never be able to hide.
+  const overridden = orders.filter(o => hasOverride(o));
+  if (overridden.length) {
+    flags.push({
+      sev: 'info', icon: '✎', title: 'Digits overridden (not per model spec)',
+      detail: 'These orders use hand-entered digit rows instead of the model data from the Google Sheet. Open one to review or revert it.',
+      orders: overridden, jumpToOrder: true
     });
   }
 
@@ -1111,22 +1182,11 @@ function showView(view) {
   }
 }
 
-function selectOrder(i, keepContext) {
-  if (!keepContext) navContext = null;
+function selectOrder(i) {
   currentOrderIdx = i;
   currentView = 'order';
   ['summaryBtn','handmadeBtn'].forEach(id => document.getElementById(id)?.classList.remove('active'));
   renderOrderDetail(i);
-}
-
-// Enter a filtered Prev/Next context (from a stat card or digit-total cell) and jump
-// to the first matching order. ids = array of order ids defining the navigable set.
-function enterNavContext(label, ids) {
-  if (!ids.length) return;
-  navContext = { label, ids };
-  const idx = orders.findIndex(o => o.id === ids[0]);
-  if (idx < 0) return;
-  selectOrder(idx, true);
 }
 
 // ── ORDER DETAIL ─────────────────────────────────────────────────────────────
@@ -1139,7 +1199,20 @@ function renderOrderDetail(i) {
   const etn = o.etn ? getETN(o.model) : null;
 
   let digitSection = '';
-  if (cust) {
+  if (overrideEditing === o.id) {
+    digitSection = renderOverrideEditor(o);
+  } else if (hasOverride(o)) {
+    digitSection = renderOverrideView(o);
+  } else if (isMixed(o)) {
+    digitSection = `<div class="alert alert-warn">
+        🎨 <strong>Mixed-color board.</strong> Per the LINE SPEC this board carries both RED and AMBER digits,
+        so the model's single-color digit list can't be used as-is. Set the color on each digit row —
+        this order contributes nothing to the totals until you do.
+      </div>
+      <div style="margin-bottom:12px">
+        <button class="btn btn-primary btn-sm" onclick="startOverride('${o.id}')">✎ Set Digit Colors</button>
+      </div>`;
+  } else if (cust) {
     digitSection = renderCustomPicker(o);
   } else {
     const digits = getDigits(o.model);
@@ -1173,45 +1246,177 @@ function renderOrderDetail(i) {
       `<div class="etn-stat"><div class="label">Half ETN</div><div class="value">${etn.half_size} × ${etn.half_qty}</div></div>` : '<div></div>'}
   </div></div>` : '';
 
-  // Prev/Next: step through the active filtered context (e.g. "Outdoor Amber") if
-  // one is set, otherwise step through the full pool as before.
-  let prevBtn = '', nextBtn = '', contextLabel = '';
-  if (navContext) {
-    const pos = navContext.ids.indexOf(o.id);
-    if (pos >= 0) {
-      contextLabel = `<div class="view-sub" style="margin-top:3px;color:var(--accent)">${navContext.label} · ${pos+1} of ${navContext.ids.length} <button class="flag-jump" style="margin-left:6px" onclick="navContext=null; selectOrder(${i});">✕ Exit filter</button></div>`;
-      if (pos > 0) {
-        const prevIdx = orders.findIndex(x => x.id === navContext.ids[pos-1]);
-        if (prevIdx >= 0) prevBtn = `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${prevIdx}, true)">← Prev</button>`;
-      }
-      if (pos < navContext.ids.length - 1) {
-        const nextIdx = orders.findIndex(x => x.id === navContext.ids[pos+1]);
-        if (nextIdx >= 0) nextBtn = `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${nextIdx}, true)">Next →</button>`;
-      }
-    }
-  } else {
-    if (i > 0) prevBtn = `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${i-1})">← Prev</button>`;
-    if (i < orders.length-1) nextBtn = `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${i+1})">Next →</button>`;
-  }
-
   document.getElementById('content').innerHTML = `
     <div class="view-header">
       <div>
         <div class="view-title" style="${colorStyle}">${o.model}</div>
         <div class="view-sub">Order #${o.order} · <span style="${colorStyle}">${colorLabel}</span> · ×${o.qty}${o.etn ? ' · <span style="color:var(--blue)">ETN '+o.etnSize+'</span>' : ''}</div>
-        ${contextLabel}
       </div>
       <div class="nav-btns">
-        ${prevBtn}
-        ${nextBtn}
+        ${i > 0 ? `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${i-1})">← Prev</button>` : ''}
+        ${i < orders.length-1 ? `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${i+1})">Next →</button>` : ''}
       </div>
     </div>
     ${digitSection}
+    ${overrideEditing === o.id || isMixed(o) || hasOverride(o) ? '' : `
+      <div style="margin:-4px 0 12px">
+        <button class="btn btn-secondary btn-sm" onclick="startOverride('${o.id}')">✎ Edit / Split Digit Colors</button>
+        <span style="font-size:0.72rem;color:var(--muted);margin-left:8px">Adjust qty, add/remove a digit, or split RED/AMBER for this order only</span>
+      </div>`}
     ${etnHtml}
     <div class="alert alert-info" style="margin-top:12px;font-size:0.78rem">
       <strong>Type:</strong> ${ind ? 'Indoor' : 'Outdoor'} &nbsp;·&nbsp;
       <strong>Handmade:</strong> ${isHandmade(o.model) ? '<span style="color:var(--green)">Yes</span>' : 'No'}
     </div>`;
+}
+
+// ── DIGIT OVERRIDE EDITOR ────────────────────────────────────────────────────
+// Opens pre-filled with the model's digit list from the Google Sheet so the common
+// case is a few clicks, not data entry. Nothing is written back to the sheet.
+let overrideDraft = [];   // working copy while the editor is open
+
+function startOverride(id) {
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  const ov = overrides[id];
+  overrideDraft = ov
+    ? ov.digits.map(d => ({ ...d }))
+    : seedOverrideRows(o);
+  overrideEditing = id;
+  const idx = orders.findIndex(x => x.id === id);
+  currentOrderIdx = idx;
+  renderOrderDetail(idx);
+}
+
+function cancelOverride() {
+  const id = overrideEditing;
+  overrideEditing = null;
+  overrideDraft = [];
+  const idx = orders.findIndex(x => x.id === id);
+  if (idx >= 0) renderOrderDetail(idx);
+}
+
+function ovSetQty(i, v)   { overrideDraft[i].qty = Math.max(0, parseFloat(v) || 0); }
+function ovSetColor(i, v) { overrideDraft[i].color = v; redrawOverrideEditor(); }
+function ovDelete(i)      { overrideDraft.splice(i, 1); redrawOverrideEditor(); }
+function ovAddRow() {
+  const o = orders.find(x => x.id === overrideEditing);
+  const ind = o ? isIndoor(o.model) : false;
+  overrideDraft.push({ item: '', qty: 1, color: ind ? '' : 'RED', isNew: true });
+  redrawOverrideEditor();
+}
+function ovSetItem(i, v)  { overrideDraft[i].item = v; }
+function ovSetAllColor(c) { overrideDraft.forEach(d => d.color = c); redrawOverrideEditor(); }
+
+function redrawOverrideEditor() {
+  const idx = orders.findIndex(x => x.id === overrideEditing);
+  if (idx >= 0) renderOrderDetail(idx);
+}
+
+function saveOverride() {
+  const id = overrideEditing;
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  const noteEl = document.getElementById('ovNote');
+  const rows = overrideDraft
+    .map(d => ({ item: (d.item || '').trim(), qty: Number(d.qty) || 0, color: d.color || '' }))
+    .filter(d => d.item && d.qty > 0);
+  if (!rows.length) { alert('Add at least one digit row with a quantity before saving.'); return; }
+  overrides[id] = { digits: rows, note: (noteEl?.value || '').trim(), savedAt: Date.now() };
+  overrideEditing = null;
+  overrideDraft = [];
+  Persist.save();
+  renderFlagsPanel();
+  renderOrderDetail(orders.findIndex(x => x.id === id));
+}
+
+// Revert to spec: drop the override entirely; the order falls straight back onto
+// the Google Sheet model data (or the custom picker) with no residue.
+function revertOverride(id) {
+  if (!confirm('Revert this order to the model spec from the Google Sheet? The override will be discarded.')) return;
+  delete overrides[id];
+  overrideEditing = null;
+  overrideDraft = [];
+  Persist.save();
+  renderFlagsPanel();
+  renderOrderDetail(orders.findIndex(x => x.id === id));
+}
+
+function renderOverrideEditor(o) {
+  const ind = isIndoor(o.model);
+  const saved = overrides[o.id];
+  const colorSel = (i, val) => ind
+    ? `<span style="font-size:0.7rem;color:var(--blue);font-family:'IBM Plex Mono',monospace">INDOOR</span>`
+    : `<select class="ov-select" onchange="ovSetColor(${i}, this.value)">
+         <option value="RED"${val==='RED'?' selected':''}>RED</option>
+         <option value="AMBER"${val==='AMBER'?' selected':''}>AMBER</option>
+       </select>`;
+
+  const rows = overrideDraft.map((d, i) => {
+    const cls = ind ? '' : (d.color === 'AMBER' ? ' ov-row-amber' : ' ov-row-red');
+    const nameCell = d.isNew
+      ? `<input type="text" class="ov-input" placeholder="Digit item name (must match sheet)" value="${d.item || ''}" oninput="ovSetItem(${i}, this.value)">`
+      : `<span class="ov-row-name">${d.item}</span>`;
+    return `<div class="ov-row${cls}${d.isNew ? ' ov-row-new' : ''}">
+      ${nameCell}
+      <input type="number" class="ov-input" min="0" step="1" value="${d.qty}" onchange="ovSetQty(${i}, this.value)" oninput="ovSetQty(${i}, this.value)">
+      ${colorSel(i, d.color)}
+      <button class="ov-del" onclick="ovDelete(${i})" title="Remove row">×</button>
+    </div>`;
+  }).join('');
+
+  const bulk = ind ? '' : `
+    <button class="btn btn-secondary btn-sm" onclick="ovSetAllColor('RED')">All → RED</button>
+    <button class="btn btn-secondary btn-sm" onclick="ovSetAllColor('AMBER')">All → AMBER</button>`;
+
+  return `<div class="card">
+    <div class="card-header">✎ Digit Override — ${o.model} · Order #${o.order} · ×${o.qty}</div>
+    <div class="ov-bar">
+      <button class="btn btn-secondary btn-sm" onclick="ovAddRow()">+ Add digit</button>
+      ${bulk}
+      <span style="flex:1"></span>
+      <button class="btn btn-secondary btn-sm" onclick="cancelOverride()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveOverride()">✓ Save Override</button>
+    </div>
+    <div class="ov-head-labels"><span>Digit Item</span><span>Qty / Board</span><span>Color</span><span></span></div>
+    ${rows || '<div style="padding:14px;font-size:0.78rem;color:var(--muted)">No rows — click “+ Add digit”.</div>'}
+    <div style="padding:10px 12px;border-top:1px solid var(--border)">
+      <div style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;margin-bottom:4px">NOTE (prints on the report)</div>
+      <input type="text" class="ov-input" id="ovNote" placeholder="e.g. Per LINE SPEC: score digits AMBER, all other digits RED"
+        value="${saved?.note || ''}">
+    </div>
+    <div style="padding:8px 12px;border-top:1px solid var(--border);font-size:0.72rem;color:var(--muted)">
+      Quantities are <strong>per board</strong> — they're multiplied by the order qty (×${o.qty}) in the totals.
+      Digit item names must match the Google Sheet exactly so they merge into the right totals row.
+    </div>
+  </div>`;
+}
+
+function renderOverrideView(o) {
+  const ov = overrides[o.id];
+  const ind = isIndoor(o.model);
+  const chip = d => {
+    const c = ind ? 'var(--blue)' : (d.color === 'AMBER' ? 'var(--amber)' : 'var(--red)');
+    return `<tr>
+      <td style="color:${c}">${d.item}</td>
+      <td class="mono" style="color:${c};font-size:0.7rem">${ind ? 'INDOOR' : d.color}</td>
+      <td><span class="qty-pill" style="background:rgba(46,204,113,0.1);color:var(--green)">${Math.round(d.qty * o.qty)}</span></td>
+    </tr>`;
+  };
+  return `<div class="card">
+    <div class="card-header">📋 Digits Required <span class="color-tag override">OVERRIDE</span></div>
+    <div class="card-body">
+      ${ov.note ? `<div class="alert alert-info" style="font-size:0.78rem;margin-bottom:10px">📝 ${ov.note}</div>` : ''}
+      <table><thead><tr><th>Digit Type</th><th>Color</th><th>Total Needed</th></tr></thead>
+      <tbody>${ov.digits.map(chip).join('')}</tbody></table>
+      <div style="display:flex;gap:6px;margin-top:12px">
+        <button class="btn btn-secondary btn-sm" onclick="startOverride('${o.id}')">✎ Edit Override</button>
+        <button class="btn btn-danger btn-sm" onclick="revertOverride('${o.id}')">↺ Revert to Spec</button>
+      </div>
+      <div style="margin-top:8px;font-size:0.72rem;color:var(--muted)">
+        This order does not use the ${o.model} digit list from the Google Sheet. The sheet is unchanged.
+      </div>
+    </div></div>`;
 }
 
 // ── CUSTOM PICKER ─────────────────────────────────────────────────────────────
@@ -1400,6 +1605,25 @@ function computeTotals() {
     const cust = isCustom(o.model);
     const map = ind ? indoor : (o.color==='RED' ? red : amber);
 
+    // OVERRIDE PATH — the only new branch. Each digit row carries its own color,
+    // so one order can feed both the RED and AMBER columns. Indoor models ignore
+    // row color entirely and land in INDOOR, exactly as they do today.
+    const ovDigits = effectiveDigits(o);
+    if (ovDigits) {
+      ovDigits.forEach(d => {
+        const m = ind ? indoor : (d.color === 'RED' ? red : amber);
+        addTo(m, d.item, d.qty * o.qty);
+      });
+      return;
+    }
+    // A MIXED board with no override yet contributes nothing — same posture as a
+    // CUSTOM with no digits entered. Better a visibly incomplete total (it's flagged
+    // high and banner-warned on the Summary) than every digit silently dumped into
+    // one color column.
+    if (isMixed(o)) return;
+
+    // ── everything below is the original path, untouched ──
+
     if (cust) {
       const key = o.id;
       const cd = customData[key];
@@ -1415,25 +1639,9 @@ function computeTotals() {
   return { amber, red, indoor };
 }
 
-// Finds every order (within the active set) contributing a given digit type to a given
-// color section (amber/red/indoor) — used to scope Prev/Next when a Digit Totals cell
-// is clicked. Mirrors the same matching logic as computeTotals above.
-function ordersForDigit(sectionKey, digitName) {
-  return activeOrders().filter(o => {
-    const ind = isIndoor(o.model);
-    const section = ind ? 'indoor' : (o.color === 'RED' ? 'red' : 'amber');
-    if (section !== sectionKey) return false;
-    if (isCustom(o.model)) {
-      const cd = customData[o.id];
-      return !!cd?.digits?.some(d => d.desc === digitName && d.qty > 0);
-    }
-    const digits = getDigits(o.model);
-    return !!digits?.some(d => d.digit === digitName);
-  }).map(o => o.id);
-}
-
 // ── LINE LISTING (sortable) ───────────────────────────────────────────────────
 function lineColorTag(o) {
+  if (o.color === 'MIXED') return '<span class="color-tag mixed">MIXED</span>';
   if (o.color === 'AMBER') return '<span class="color-tag amber">AMBER</span>';
   if (o.color === 'RED')   return '<span class="color-tag red">RED</span>';
   return '<span class="color-tag indoor">INDOOR</span>';
@@ -1453,7 +1661,7 @@ function sortLineListing(key) {
 function renderLineListing() {
   const rows = [...lineListingRows];
   const dir = lineSort.dir === 'asc' ? 1 : -1;
-  const colorRank = { 'AMBER': 0, 'RED': 1, '': 2 };
+  const colorRank = { 'AMBER': 0, 'RED': 1, 'MIXED': 2, '': 3 };
 
   const cmp = {
     date:  (a,b) => (a.date||'').localeCompare(b.date||'') * dir,
@@ -1503,12 +1711,11 @@ function sectionHeaderHtml(label, sectionKey) {
 function lineRowHtml(o, sectionKey) {
   const safeId = String(o.id).replace(/[^a-zA-Z0-9]/g,'_');
   const secAttr = sectionKey ? ` data-section="${sectionKey}"` : '';
-  const hm = lineModelIsHandmade(o);
   return `<tr class="tl-row" id="tlrow_${safeId}"${secAttr} onclick="toggleLineDetail('${o.id}')">
     <td class="mono" style="color:var(--muted);font-size:0.75rem"><span class="tl-chevron" id="tlchev_${safeId}">▸</span> ${o.date || '—'}</td>
     <td class="mono">${o.order}</td>
     <td class="mono">×${o.qty}</td>
-    <td><strong${hm ? ' style="color:var(--green)"' : ''}>${o.model}</strong>${o.custom?' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>':''}</td>
+    <td><strong>${o.model}</strong>${o.custom?' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>':''}${o.override?' <span class="color-tag override">OVERRIDE</span>':''}</td>
     <td>${lineColorTag(o)}</td>
     <td class="mono">${o.etn ? (o.etnSize || 'ETN') : '—'}</td>
   </tr>
@@ -1574,6 +1781,30 @@ function toggleSectionDetails(sectionKey) {
 
 // Builds the digit-breakdown panel shown inside an expanded line-listing row.
 function renderLineDigitDetail(o) {
+  // Override wins over both the custom picker and the sheet's model data.
+  const ov = overrides[o.id];
+  if (ov) {
+    const ind = isIndoor(o.model);
+    const chips = ov.digits.filter(d => d.qty > 0).map(d => {
+      const c = ind ? 'var(--blue)' : (d.color === 'AMBER' ? 'var(--amber)' : 'var(--red)');
+      return `<div class="tl-chip" style="border-left:3px solid ${c}">
+        <span class="tl-chip-name">${d.item}</span>
+        <span class="tl-chip-qty">${Math.round(d.qty * o.qty)}</span>
+      </div>`;
+    }).join('');
+    const note = ov.note ? `<div class="tl-digit-group-label" style="text-transform:none;letter-spacing:0">📝 ${ov.note}</div>` : '';
+    return `<div class="tl-detail-panel">
+      <div class="tl-digit-group-label">Overridden — not per ${o.model} sheet spec</div>
+      ${note}
+      <div class="tl-digit-row">${chips}</div>
+    </div>`;
+  }
+
+  if (isMixed(o)) {
+    const idx = orders.findIndex(x => x.id === o.id);
+    return `<div class="tl-detail-empty">Mixed-color board — no digit override entered yet. <button class="flag-jump" onclick="event.stopPropagation(); selectOrder(${idx})">Set digit colors →</button></div>`;
+  }
+
   if (o.custom) {
     const cd = customData[o.id];
     if (!cd?.digits?.some(d => d.qty > 0)) {
@@ -1630,20 +1861,6 @@ function buildDigitDetailHtml(standardItems, handmadeItems, orderQty, getName, g
   return `<div class="tl-detail-panel">${standardHtml}${handmadeHtml}</div>`;
 }
 
-// Builds one clickable summary stat card. Clicking opens the Order Detail view for the
-// first matching order with Prev/Next scoped to just this filtered group (ids). Cards
-// with no matching orders render disabled (no click, no hover highlight).
-function statCardHtml(num, color, label, ids) {
-  const safeLabel = label.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  const colorStyle = color ? ` style="color:${color}"` : '';
-  if (!ids.length) {
-    return `<div class="stat-card disabled"><div class="num"${colorStyle}>${num}</div><div class="lbl">${label}</div></div>`;
-  }
-  return `<div class="stat-card" onclick='enterNavContext("${safeLabel}", ${JSON.stringify(ids)})'>
-    <div class="num"${colorStyle}>${num}</div><div class="lbl">${label}</div>
-  </div>`;
-}
-
 function renderSummary() {
   const view = activeOrders();
   const { amber, red, indoor } = computeTotals();
@@ -1652,8 +1869,11 @@ function renderSummary() {
   const amberCount   = view.filter(o => o.color==='AMBER').reduce((s,o)=>s+o.qty,0);
   const redCount     = view.filter(o => o.color==='RED').reduce((s,o)=>s+o.qty,0);
   const etnCount     = view.filter(o => o.etn).reduce((s,o)=>s+o.qty,0);
-  const customPending= view.filter(o => isCustom(o.model) && !customData[o.id]).length;
+  const mixedCount   = view.filter(o => isMixed(o)).reduce((s,o)=>s+o.qty,0);
+  const customPending= view.filter(o => isCustom(o.model) && !customData[o.id] && !hasOverride(o)).length;
   const etnNoSize    = view.filter(o => o.etn && !o.etnSize && !isCustom(o.model)).length;
+  const mixedPending = view.filter(o => isMixed(o) && !hasOverride(o)).length;
+  const overriddenCt = view.filter(o => hasOverride(o)).length;
 
   // Handmade digit-type names (sink these to the bottom of each digit column)
   const hmDigitNames = new Set([
@@ -1669,16 +1889,8 @@ function renderSummary() {
     // Standard digits first (alpha), then handmade digits (alpha) at the bottom
     const standard = all.filter(([d]) => !isHmDigit(d)).sort((a,b)=>a[0].localeCompare(b[0]));
     const handmade = all.filter(([d]) =>  isHmDigit(d)).sort((a,b)=>a[0].localeCompare(b[0]));
-    const digitRow = (d, q, hm) => {
-      const ids = ordersForDigit(cls, d);
-      const label = (`${title} — ${d}`).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-      const onclick = ids.length ? ` onclick='enterNavContext("${label}", ${JSON.stringify(ids)})'` : '';
-      const rowClass = hm ? ' class="dg-hm-row"' : '';
-      const nameCell = hm ? `${d} <span class="dg-hm-tag">IN-HOUSE</span>` : d;
-      return `<tr${rowClass}${onclick}><td>${nameCell}</td><td class="${qtyClass}">${Math.round(q)}</td></tr>`;
-    };
-    const stdRows = standard.map(([d,q])=>digitRow(d, q, false)).join('');
-    const hmRows  = handmade.map(([d,q])=>digitRow(d, q, true)).join('');
+    const stdRows = standard.map(([d,q])=>`<tr><td>${d}</td><td class="${qtyClass}">${Math.round(q)}</td></tr>`).join('');
+    const hmRows  = handmade.map(([d,q])=>`<tr class="dg-hm-row"><td>${d} <span class="dg-hm-tag">IN-HOUSE</span></td><td class="${qtyClass}">${Math.round(q)}</td></tr>`).join('');
     const divider = (standard.length && handmade.length) ? `<tr class="dg-divider"><td colspan="2">In-House Digits</td></tr>` : '';
     return `<div class="dg-col-panel"><div class="dg-col-header ${cls}">${title}</div>
       <table class="dg-table"><tbody>
@@ -1693,12 +1905,13 @@ function renderSummary() {
   lineListingRows = view.map(o => ({
     id: o.id, date: o.date || '', order: o.order, qty: o.qty, model: o.model, color: o.color,
     etn: o.etn, etnSize: o.etnSize,
-    indoor: isIndoor(o.model), custom: isCustom(o.model)
+    indoor: isIndoor(o.model), custom: isCustom(o.model), override: hasOverride(o)
   }));
   const lineTable = renderLineListing();
 
   // ── ETN section ──
   const colorTag = o => {
+    if (o.color === 'MIXED') return '<span class="color-tag mixed">MIXED</span>';
     if (o.color === 'AMBER') return '<span class="color-tag amber">AMBER</span>';
     if (o.color === 'RED')   return '<span class="color-tag red">RED</span>';
     return '<span class="color-tag indoor">INDOOR</span>';
@@ -1764,12 +1977,16 @@ function renderSummary() {
       ${tag('Shot clocks held', shotHeld.length, '#8b5cf6')}
       ${tag('Pending rush', pendingRush.length, '#e05c2a')}
       ${tag('Custom awaiting digits', customPending, '#ef4444')}
+      ${tag('Mixed awaiting override', mixedPending, '#ef4444')}
       ${tag('ETN awaiting size', etnNoSize, '#ef4444')}
+      ${tag('Overridden', overriddenCt, '#8b5cf6')}
     </div>`;
   } else {
     runControls = `<div class="recon-strip">
       ${customPending>0?`<span class="recon-pill" style="background:#ef444422;color:#ef4444">Custom awaiting digits: ${customPending}</span>`:''}
+      ${mixedPending>0?`<span class="recon-pill" style="background:#ef444422;color:#ef4444">Mixed awaiting override: ${mixedPending}</span>`:''}
       ${etnNoSize>0?`<span class="recon-pill" style="background:#ef444422;color:#ef4444">ETN awaiting size: ${etnNoSize}</span>`:''}
+      ${overriddenCt>0?`<span class="recon-pill" style="background:#8b5cf622;color:#8b5cf6">Overridden: ${overriddenCt}</span>`:''}
       ${pendingRush.length>0?`<span class="recon-pill" style="background:#e05c2a22;color:#e05c2a">Pending rush: ${pendingRush.length}</span>`:''}
     </div>`;
   }
@@ -1807,13 +2024,16 @@ function renderSummary() {
     ${runControls}
     ${pendingBox}
     ${customPending>0 ? `<div class="alert alert-warn">⚠ ${customPending} CUSTOM order(s) have no digit data entered yet — totals are incomplete.</div>` : ''}
+    ${mixedPending>0 ? `<div class="alert alert-warn">⚠ ${mixedPending} MIXED-color board(s) have no digit override entered yet — their digits are NOT in these totals.</div>` : ''}
     ${etnNoSize>0 ? `<div class="alert alert-warn">⚠ ${etnNoSize} ETN order(s) flagged but missing a panel size — verify from paperwork.</div>` : ''}
+    ${overriddenCt>0 ? `<div class="alert alert-info">✎ ${overriddenCt} order(s) use overridden digits (not the model spec from the Google Sheet). Marked OVERRIDE in the line listing.</div>` : ''}
     <div class="summary-grid">
-      ${statCardHtml(outdoorCount+indoorCount, '', totalsView==='pool'?'Pool Boards':'Boards This Run', view.map(o=>o.id))}
-      ${statCardHtml(amberCount, 'var(--amber)', 'Outdoor Amber', view.filter(o=>o.color==='AMBER' && !isIndoor(o.model)).map(o=>o.id))}
-      ${statCardHtml(redCount, 'var(--red)', 'Outdoor Red', view.filter(o=>o.color==='RED' && !isIndoor(o.model)).map(o=>o.id))}
-      ${statCardHtml(indoorCount, 'var(--blue)', 'Indoor', view.filter(o=>isIndoor(o.model)).map(o=>o.id))}
-      ${statCardHtml(etnCount, '#3b82f6', 'ETN Boards', view.filter(o=>o.etn).map(o=>o.id))}
+      <div class="stat-card"><div class="num">${outdoorCount+indoorCount}</div><div class="lbl">${totalsView==='pool'?'Pool Boards':'Boards This Run'}</div></div>
+      <div class="stat-card"><div class="num" style="color:var(--amber)">${amberCount}</div><div class="lbl">Outdoor Amber</div></div>
+      <div class="stat-card"><div class="num" style="color:var(--red)">${redCount}</div><div class="lbl">Outdoor Red</div></div>
+      <div class="stat-card"><div class="num" style="color:var(--blue)">${indoorCount}</div><div class="lbl">Indoor</div></div>
+      <div class="stat-card"><div class="num" style="color:#3b82f6">${etnCount}</div><div class="lbl">ETN Boards</div></div>
+      ${mixedCount>0 ? `<div class="stat-card"><div class="num" style="color:var(--accent2)">${mixedCount}</div><div class="lbl">Mixed Color</div></div>` : ''}
     </div>
     <div class="section-label-lg">Digit Totals</div>
     <div class="dg-columns">
@@ -1831,7 +2051,7 @@ function renderSummary() {
 function renderHandmade() {
   const view = activeOrders();
   const hmOrders = view.filter(o => {
-    if (isCustom(o.model)) return lineModelIsHandmade(o); // custom order: only if saved digits include an in-house item
+    if (isCustom(o.model)) return false;
     return hmOutdoor.has(o.model) || hmIndoor.has(o.model);
   });
 
@@ -1846,16 +2066,22 @@ function renderHandmade() {
   hmOrders.forEach(o => {
     const ind = isIndoor(o.model);
     const map = ind ? indoor : (o.color === 'RED' ? red : amber);
-    if (isCustom(o.model)) {
-      // Custom order: pull only the in-house items from what was actually saved for this order.
-      const cd = customData[o.id];
-      const hmNames = new Set(ind ? DB.custom_indoor_handmade : DB.custom_outdoor_handmade);
-      (cd?.digits || []).forEach(d => {
-        if (d.qty > 0 && hmNames.has(d.desc)) map[d.desc] = (map[d.desc] || 0) + d.qty * o.qty;
+    const hmDigits = hmOutdoorDigits[o.model] || hmIndoorDigits[o.model] || [];
+
+    // Overridden order: take the in-house rows from the override (each carries its
+    // own color) instead of the model's sheet list, so qty edits and RED/AMBER splits
+    // flow through to the Handmade sheet too.
+    const ovDigits = effectiveDigits(o);
+    if (ovDigits) {
+      const hmNames = new Set(hmDigits.map(d => d.digit));
+      ovDigits.filter(d => hmNames.has(d.item)).forEach(d => {
+        const m = ind ? indoor : (d.color === 'RED' ? red : amber);
+        m[d.item] = (m[d.item] || 0) + d.qty * o.qty;
       });
       return;
     }
-    const hmDigits = hmOutdoorDigits[o.model] || hmIndoorDigits[o.model] || [];
+    if (isMixed(o)) return;   // unresolved mixed board — flagged, contributes nothing
+
     hmDigits.forEach(d => {
       map[d.digit] = (map[d.digit] || 0) + d.qty * o.qty;
     });
