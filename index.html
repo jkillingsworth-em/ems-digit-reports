@@ -921,6 +921,8 @@ function enterNavContext(label, ids) {
 function ordersForDigit(sectionKey, digitName) {
   return activeOrders().filter(o => {
     const ind = isIndoor(o.model);
+    const noColor = !ind && !isCustom(o.model) && o.color !== 'RED' && o.color !== 'AMBER' && o.color !== 'MIXED';
+    if (noColor) return false; // no-color outdoor contributes to no column
     const section = ind ? 'indoor' : (o.color === 'RED' ? 'red' : 'amber');
     if (section !== sectionKey) return false;
     // Override path: check override digits if present
@@ -1687,24 +1689,23 @@ function computeTotals() {
   activeOrders().forEach(o => {
     const ind = isIndoor(o.model);
     const cust = isCustom(o.model);
+    // No-color outdoor: not indoor per the sheet, but no AMBER/RED set yet.
+    // Contribute nothing — flagged med, same posture as unresolved MIXED.
+    const noColor = !ind && !cust && o.color !== 'RED' && o.color !== 'AMBER' && o.color !== 'MIXED';
     const map = ind ? indoor : (o.color==='RED' ? red : amber);
 
-    // OVERRIDE PATH — the only new branch. Each digit row carries its own color,
-    // so one order can feed both the RED and AMBER columns. Indoor models ignore
-    // row color entirely and land in INDOOR, exactly as they do today.
+    // OVERRIDE PATH — each digit row carries its own color.
     const ovDigits = effectiveDigits(o);
     if (ovDigits) {
+      if (noColor) return;
       ovDigits.forEach(d => {
         const m = ind ? indoor : (d.color === 'RED' ? red : amber);
         addTo(m, d.item, d.qty * o.qty);
       });
       return;
     }
-    // A MIXED board with no override yet contributes nothing — same posture as a
-    // CUSTOM with no digits entered. Better a visibly incomplete total (it's flagged
-    // high and banner-warned on the Summary) than every digit silently dumped into
-    // one color column.
     if (isMixed(o)) return;
+    if (noColor) return;
 
     // ── everything below is the original path, untouched ──
 
@@ -1728,6 +1729,7 @@ function lineColorTag(o) {
   if (o.color === 'MIXED') return '<span class="color-tag mixed">MIXED</span>';
   if (o.color === 'AMBER') return '<span class="color-tag amber">AMBER</span>';
   if (o.color === 'RED')   return '<span class="color-tag red">RED</span>';
+  if (!isIndoor(o.model) && !isCustom(o.model)) return '<span class="color-tag" style="background:rgba(224,92,42,0.12);color:var(--accent2)">NO COLOR</span>';
   return '<span class="color-tag indoor">INDOOR</span>';
 }
 
@@ -2007,6 +2009,7 @@ function renderSummary() {
     if (o.color === 'MIXED') return '<span class="color-tag mixed">MIXED</span>';
     if (o.color === 'AMBER') return '<span class="color-tag amber">AMBER</span>';
     if (o.color === 'RED')   return '<span class="color-tag red">RED</span>';
+    if (!isIndoor(o.model) && !isCustom(o.model)) return '<span class="color-tag" style="background:rgba(224,92,42,0.12);color:var(--accent2)">NO COLOR</span>';
     return '<span class="color-tag indoor">INDOOR</span>';
   };
   const etnOrders = view.filter(o => o.etn);
@@ -2158,14 +2161,13 @@ function renderHandmade() {
   const amber = {}, red = {}, indoor = {};
   hmOrders.forEach(o => {
     const ind = isIndoor(o.model);
+    const noColor = !ind && !isCustom(o.model) && o.color !== 'RED' && o.color !== 'AMBER' && o.color !== 'MIXED';
     const map = ind ? indoor : (o.color === 'RED' ? red : amber);
     const hmDigits = hmOutdoorDigits[o.model] || hmIndoorDigits[o.model] || [];
 
-    // Overridden order: take the in-house rows from the override (each carries its
-    // own color) instead of the model's sheet list, so qty edits and RED/AMBER splits
-    // flow through to the Handmade sheet too.
     const ovDigits = effectiveDigits(o);
     if (ovDigits) {
+      if (noColor) return;
       const hmNames = new Set(hmDigits.map(d => d.digit));
       ovDigits.filter(d => hmNames.has(d.item)).forEach(d => {
         const m = ind ? indoor : (d.color === 'RED' ? red : amber);
@@ -2173,7 +2175,8 @@ function renderHandmade() {
       });
       return;
     }
-    if (isMixed(o)) return;   // unresolved mixed board — flagged, contributes nothing
+    if (isMixed(o)) return;   // unresolved mixed — contributes nothing
+    if (noColor) return;       // no color set — contributes nothing (flagged med)
 
     hmDigits.forEach(d => {
       map[d.digit] = (map[d.digit] || 0) + d.qty * o.qty;
@@ -2242,14 +2245,17 @@ function renderHandmade() {
         : `<div style="color:var(--muted);font-size:0.75rem;margin-top:6px">No in-house digit data for this model.</div>`;
     }
 
+    const _ind = isIndoor(o.model);
+    const _noColor = !_ind && !isCustom(o.model) && o.color !== 'RED' && o.color !== 'AMBER' && o.color !== 'MIXED';
     const colorTagHtml = isMixed(o)
       ? '<span class="color-tag mixed">MIXED</span>'
       : o.color === 'AMBER' ? '<span class="color-tag amber">AMBER</span>'
       : o.color === 'RED'   ? '<span class="color-tag red">RED</span>'
+      : _noColor ? '<span class="color-tag" style="background:rgba(224,92,42,0.12);color:var(--accent2)">NO COLOR</span>'
       : '<span class="color-tag indoor">INDOOR</span>';
 
     const overrideTag = hasOverride(o) ? ' <span class="color-tag override">OVERRIDE</span>' : '';
-    const borderColor = o.color === 'AMBER' ? 'var(--amber)' : o.color === 'RED' ? 'var(--red)' : isMixed(o) ? 'var(--accent2)' : 'var(--blue)';
+    const borderColor = o.color === 'AMBER' ? 'var(--amber)' : o.color === 'RED' ? 'var(--red)' : isMixed(o) ? 'var(--accent2)' : _noColor ? 'var(--accent2)' : 'var(--blue)';
 
     return `<div class="hm-order-card" style="border-left-color:${borderColor}">
       <div class="hm-order-row">
