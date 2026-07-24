@@ -1876,7 +1876,7 @@ function renderLineDigitDetail(o) {
       const c = ind ? 'var(--blue)' : (d.color === 'AMBER' ? 'var(--amber)' : 'var(--red)');
       return `<div class="tl-chip" style="border-left:3px solid ${c}">
         <span class="tl-chip-name">${d.item}</span>
-        <span class="tl-chip-qty">${Math.round(d.qty * o.qty)}</span>
+        <span class="tl-chip-qty" style="background:${c};color:#000">${Math.round(d.qty * o.qty)}</span>
       </div>`;
     }).join('');
     const note = ov.note ? `<div class="tl-digit-group-label" style="text-transform:none;letter-spacing:0">📝 ${ov.note}</div>` : '';
@@ -1906,7 +1906,8 @@ function renderLineDigitDetail(o) {
     const entries = cd.digits.filter(d => d.qty > 0);
     const standard = entries.filter(d => !hmNames.has(d.desc));
     const handmade = entries.filter(d =>  hmNames.has(d.desc));
-    return buildDigitDetailHtml(standard, handmade, o.qty, d => d.desc, d => d.qty);
+    const accentColor = ind ? 'var(--blue)' : (o.color === 'AMBER' ? 'var(--amber)' : o.color === 'RED' ? 'var(--red)' : 'var(--accent2)');
+    return buildDigitDetailHtml(standard, handmade, o.qty, d => d.desc, d => d.qty, accentColor);
   }
 
   const digits = getDigits(o.model);
@@ -1918,19 +1919,22 @@ function renderLineDigitDetail(o) {
   const hmSet = new Set(hmDigits.map(d => d.digit));
   const standard = digits.filter(d => !hmSet.has(d.digit));
   const handmade = digits.filter(d =>  hmSet.has(d.digit));
-  return buildDigitDetailHtml(standard, handmade, o.qty, d => d.digit, d => d.qty);
+  const ind2 = isIndoor(o.model);
+  const accentColor2 = ind2 ? 'var(--blue)' : (o.color === 'AMBER' ? 'var(--amber)' : o.color === 'RED' ? 'var(--red)' : 'var(--accent2)');
+  return buildDigitDetailHtml(standard, handmade, o.qty, d => d.digit, d => d.qty, accentColor2);
 }
 
 // Shared chip-group builder for the line-listing expand panel. Standard digits
 // render first as plain chips; handmade/in-house digits (if any) render below a
 // labeled divider in green so they're unmistakable regardless of how many chips
 // are on screen — matches the same standard/in-house split used in Digit Totals.
-function buildDigitDetailHtml(standardItems, handmadeItems, orderQty, getName, getPerUnitQty) {
+function buildDigitDetailHtml(standardItems, handmadeItems, orderQty, getName, getPerUnitQty, accentColor) {
   const chip = (item, isHm) => {
     const total = Math.round(getPerUnitQty(item) * orderQty);
+    const qtyStyle = (!isHm && accentColor) ? ` style="background:${accentColor};color:#000"` : '';
     return `<div class="tl-chip${isHm ? ' tl-chip-hm' : ''}">
       <span class="tl-chip-name">${getName(item)}</span>
-      <span class="tl-chip-qty">${total}</span>
+      <span class="tl-chip-qty"${qtyStyle}>${total}</span>
     </div>`;
   };
 

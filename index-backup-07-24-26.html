@@ -182,6 +182,7 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
 .stat-card .num { font-family: 'Bebas Neue', sans-serif; font-size: 2.2rem; color: var(--accent); line-height: 1; }
 .stat-card .lbl { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+.stat-card.disabled { opacity: 0.45; cursor: default; }
 
 /* Digit columns (summary) */
 .dg-columns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 18px; align-items: start; }
@@ -278,6 +279,7 @@ tr:hover td { background: rgba(255,255,255,0.018); }
   .card { break-inside: avoid; }
   .tl-table tr, .dg-col-panel { break-inside: avoid; }
   .section-block { break-inside: avoid; }
+  .hm-order-card { break-inside: avoid; }
 }
 
 /* Order line-listing table */
@@ -297,24 +299,92 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 .th-sort { cursor: pointer; user-select: none; transition: color 0.12s; white-space: nowrap; }
 .th-sort:hover { color: var(--accent); }
 .th-sort.th-active { color: var(--accent); }
-.th-grouprow td { padding: 0; border: none; background: var(--surface2); }
-.group-toggle {
-  background: none; border: none; cursor: pointer;
-  font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; letter-spacing: 1px;
-  text-transform: uppercase; color: var(--muted); padding: 6px 10px; width: 100%; text-align: left;
-  transition: color 0.12s;
-}
-.group-toggle:hover { color: var(--accent); }
-.group-toggle.th-active { color: var(--accent); }
 .tl-section-row td {
   background: var(--surface2); font-family: 'IBM Plex Mono', monospace;
   font-size: 0.62rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
 }
+.tl-section-toggle {
+  background: var(--surface); border: 1px solid var(--border); color: var(--accent);
+  border-radius: 3px; width: 18px; height: 18px; line-height: 1; cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
+  flex-shrink: 0; transition: all 0.12s;
+}
+.tl-section-toggle:hover { border-color: var(--accent); background: rgba(240,165,0,0.1); }
 .color-tag { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 0.68rem; font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
 .color-tag.amber { background: rgba(245,158,11,0.15); color: var(--amber); }
 .color-tag.red { background: rgba(231,76,60,0.15); color: var(--red); }
 .color-tag.indoor { background: rgba(59,130,246,0.15); color: var(--blue); }
+.color-tag.mixed { background: linear-gradient(90deg, rgba(231,76,60,0.18), rgba(245,158,11,0.18)); color: var(--accent2); }
+.color-tag.override { background: rgba(139,92,246,0.16); color: #8b5cf6; }
 .tl-card { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; overflow: hidden; margin-bottom: 12px; }
+
+/* ── Digit override editor (per-order) ── */
+.ov-row {
+  display: grid; grid-template-columns: 1fr 80px 108px 30px; gap: 8px; align-items: center;
+  padding: 6px 12px; border-bottom: 1px solid var(--border); border-left: 3px solid transparent;
+}
+.ov-row:hover { background: var(--surface2); }
+.ov-row-red   { border-left-color: var(--red); }
+.ov-row-amber { border-left-color: var(--amber); }
+.ov-row-name  { font-size: 0.8rem; }
+.ov-row-new .ov-row-name::after {
+  content: 'ADDED'; margin-left: 6px; font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.58rem; letter-spacing: 1px; color: var(--green); opacity: 0.85;
+}
+.ov-input, .ov-select {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  border-radius: 4px; padding: 4px 6px; font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; width: 100%;
+}
+.ov-del {
+  background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 4px;
+  cursor: pointer; width: 26px; height: 26px; line-height: 1; padding: 0; font-size: 0.85rem;
+}
+.ov-del:hover { border-color: var(--red); color: var(--red); }
+.ov-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.ov-head-labels {
+  display: grid; grid-template-columns: 1fr 80px 108px 30px; gap: 8px;
+  padding: 6px 12px; background: var(--surface2);
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--muted);
+}
+@media print { .ov-bar, .ov-del { display: none !important; } }
+
+/* Expandable order-line rows (digit drill-down) */
+.tl-row { cursor: pointer; }
+.tl-row.tl-row-open td { background: rgba(240,165,0,0.05); }
+.tl-chevron { display: inline-block; width: 9px; color: var(--accent); font-size: 0.7rem; transition: transform 0.12s; }
+.tl-detail-row td { padding: 0; border-bottom: 1px solid rgba(42,48,69,0.4); }
+.tl-detail-panel { padding: 10px 14px 12px 30px; background: rgba(255,255,255,0.012); }
+.tl-detail-empty {
+  padding: 10px 14px 12px 30px; color: var(--muted); font-size: 0.78rem;
+  background: rgba(255,255,255,0.012); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.tl-digit-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tl-digit-row + .tl-digit-group { margin-top: 9px; }
+.tl-digit-group {
+  border-top: 1px dashed rgba(46,204,113,0.25); padding-top: 8px; margin-top: 4px;
+}
+.tl-digit-group-label {
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--green); font-weight: 700; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 5px;
+}
+.tl-digit-group-label::before { content: '●'; font-size: 0.55rem; }
+.tl-chip {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 5px; padding: 4px 6px 4px 10px; font-size: 0.78rem;
+  font-family: 'IBM Plex Mono', monospace; display: flex; align-items: center; gap: 7px;
+}
+.tl-chip .tl-chip-name { font-weight: 600; }
+.tl-chip .tl-chip-qty {
+  color: #000; background: var(--accent); font-weight: 700;
+  border-radius: 3px; padding: 1px 6px; font-size: 0.74rem;
+}
+.tl-chip-hm { background: rgba(46,204,113,0.07); border-color: rgba(46,204,113,0.35); }
+.tl-chip-hm .tl-chip-name { color: var(--green); }
+.tl-chip-hm .tl-chip-qty { background: var(--green); }
 
 .parse-info { font-size: 0.7rem; color: var(--muted); font-family: 'IBM Plex Mono', monospace; padding: 6px 16px; border-top: 1px solid var(--border); }
 .sidebar-footer { padding: 8px 16px; border-top: 1px solid var(--border); display: flex; gap: 6px; }
@@ -378,6 +448,20 @@ tr:hover td { background: rgba(255,255,255,0.018); }
   background: rgba(240,165,0,0.08); border: 1px solid rgba(240,165,0,0.2);
   border-radius: 4px; padding: 3px 10px;
 }
+.run-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:10px;flex-wrap:wrap}
+.run-bar-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.run-badge{font-family:'IBM Plex Mono',monospace;font-size:0.72rem;letter-spacing:1px;color:var(--accent2);background:rgba(224,92,42,0.12);padding:4px 10px;border-radius:5px;font-weight:600}
+.run-toggle{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.run-toggle button{background:var(--surface);color:var(--muted);border:none;padding:6px 12px;font-family:'IBM Plex Mono',monospace;font-size:0.74rem;cursor:pointer}
+.run-toggle button.rt-active{background:var(--accent);color:#fff;font-weight:600}
+.recon-strip{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.recon-pill{font-family:'IBM Plex Mono',monospace;font-size:0.7rem;padding:4px 9px;border-radius:5px;font-weight:600}
+.pending-box{background:rgba(224,92,42,0.06);border:1px solid rgba(224,92,42,0.3);border-radius:8px;padding:12px 14px;margin-bottom:14px}
+.pending-head{font-family:'IBM Plex Mono',monospace;font-size:0.74rem;letter-spacing:0.5px;color:var(--accent2);font-weight:600;margin-bottom:10px}
+.pending-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border);flex-wrap:wrap}
+.pending-info{font-family:'IBM Plex Mono',monospace;font-size:0.8rem}
+.pending-note{color:var(--muted);font-size:0.72rem;margin-left:6px}
+.pending-actions{display:flex;gap:6px}
 </style>
 </head>
 <body>
@@ -417,6 +501,14 @@ tr:hover td { background: rgba(255,255,255,0.018); }
       <div class="manual-entry">
         <textarea id="manualInput" placeholder="Paste order data from Claude's report:&#10;DATE, ORDER, QTY, MODEL, COLOR, ETN, ETN_SIZE&#10;&#10;e.g. JUNE 15, 92004, 1, LX1740, AMBER, FALSE,&#10;JUNE 15, 92005, 2, LX2665, , FALSE,&#10;JUNE 16, 92006, 1, LXCUSTOM-O1, RED, TRUE, 9X56"></textarea>
         <button class="btn btn-primary btn-full" onclick="parseManualInput()">+ Add Orders</button>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Production Check (compare run)</div>
+      <div class="manual-entry">
+        <textarea id="prodInput" placeholder="Paste the PRODUCTION list extraction here to compare against the pool.&#10;Same format. Matches by ORDER + MODEL.&#10;Shot clocks absent from production are expected."></textarea>
+        <button class="btn btn-secondary btn-full" onclick="parseProductionInput()">⚖ Compare Production Run</button>
+        <div class="parse-info" id="prodInfo"></div>
       </div>
     </div>
     <div class="sidebar-section" style="display:flex;gap:6px;align-items:center;">
@@ -543,35 +635,61 @@ function buildETNs(rows) {
   return map;
 }
 
-async function fetchCSV(url) {
+async function fetchCSV(url, attempt = 1) {
   // Use our own Vercel serverless proxy - no CORS issues
   const proxyUrl = '/api/sheets?url=' + encodeURIComponent(url);
-  const res = await fetch(proxyUrl);
-  if (!res.ok) throw new Error('Proxy error HTTP ' + res.status);
-  const text = await res.text();
-  if (!text || text.length < 20) throw new Error('Empty response from proxy');
-  console.log('fetchCSV OK, first line:', text.split('\n')[0].substring(0, 60));
-  return text;
+  const MAX_ATTEMPTS = 4;
+  const TIMEOUT_MS = 12000;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const res = await fetch(proxyUrl, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('Proxy error HTTP ' + res.status);
+    const text = await res.text();
+    if (!text || text.length < 20) throw new Error('Empty response from proxy');
+    console.log('fetchCSV OK, first line:', text.split('\n')[0].substring(0, 60));
+    return text;
+  } catch (err) {
+    if (attempt < MAX_ATTEMPTS) {
+      const delay = attempt * 1000; // 1s, 2s, 3s backoff
+      console.warn(`fetchCSV attempt ${attempt} failed (${err.message}), retrying in ${delay}ms...`);
+      await new Promise(r => setTimeout(r, delay));
+      return fetchCSV(url, attempt + 1);
+    }
+    throw new Error(`Failed after ${MAX_ATTEMPTS} attempts: ${err.message}`);
+  }
 }
 
 async function loadAllData() {
   const loadingEl = document.getElementById('loadingOverlay');
   const setStatus = msg => { if (loadingEl) loadingEl.querySelector('.load-status').textContent = msg; };
   try {
-    setStatus('Fetching outdoor model data...');
-    const outdoorTxt = await fetchCSV(SHEET_URLS.outdoor_models);
+    setStatus('Fetching all sheet data...');
+    const labels = {
+      outdoor_models: 'outdoor model data', indoor_models: 'indoor model data',
+      outdoor_handmade: 'outdoor handmade data', indoor_handmade: 'indoor handmade data',
+      etns: 'ETN data',
+    };
+    let doneCount = 0;
+    const total = Object.keys(SHEET_URLS).length;
+    const fetchTracked = async (key) => {
+      const txt = await fetchCSV(SHEET_URLS[key]);
+      doneCount++;
+      setStatus(`Loaded ${labels[key]} (${doneCount}/${total})...`);
+      return [key, txt];
+    };
+
+    const results = await Promise.all(Object.keys(SHEET_URLS).map(fetchTracked));
+    const txtByKey = Object.fromEntries(results);
+
+    const outdoorTxt = txtByKey.outdoor_models;
+    const indoorTxt   = txtByKey.indoor_models;
+    const outHMTxt    = txtByKey.outdoor_handmade;
+    const inHMTxt     = txtByKey.indoor_handmade;
+    const etnTxt       = txtByKey.etns;
     console.log('outdoor first line:', outdoorTxt.split('\n')[0]);
-
-    setStatus('Fetching indoor model data...');
-    const indoorTxt = await fetchCSV(SHEET_URLS.indoor_models);
     console.log('indoor first line:', indoorTxt.split('\n')[0]);
-
-    setStatus('Fetching handmade data...');
-    const outHMTxt = await fetchCSV(SHEET_URLS.outdoor_handmade);
-    const inHMTxt  = await fetchCSV(SHEET_URLS.indoor_handmade);
-
-    setStatus('Fetching ETN data...');
-    const etnTxt = await fetchCSV(SHEET_URLS.etns);
     console.log('etn first line:', etnTxt.split('\n')[0]);
 
     setStatus('Building data...');
@@ -600,8 +718,16 @@ async function loadAllData() {
     rebuildHMSets();
     if (loadingEl) loadingEl.style.display = 'none';
     document.getElementById('appMain').style.display = 'flex';
+
+    // Restore any persisted pool / run state
+    if (Persist.load()) {
+      orders.forEach(o => { if (o.runStatus === undefined) o.runStatus = null; });
+      renderFlagsPanel();
+      updateWeekLabel();
+      showView('summary');
+    }
   } catch(err) {
-    if (loadingEl) loadingEl.innerHTML = '<div style="color:#e74c3c;font-family:monospace;padding:30px;font-size:0.85rem;line-height:1.8">Failed to load data from Google Sheets.<br>Check your connection and refresh.<br><br><strong>' + err + '</strong></div>';
+    if (loadingEl) loadingEl.innerHTML = '<div style="color:#e74c3c;font-family:monospace;padding:30px;font-size:0.85rem;line-height:1.8;text-align:center">Failed to load data from Google Sheets after several attempts.<br>This is usually temporary.<br><br><strong>' + err + '</strong><br><br><button onclick="loadAllData()" style="background:#f0a500;color:#000;border:none;padding:8px 18px;border-radius:5px;font-weight:600;cursor:pointer;font-family:inherit">Retry</button></div>';
     console.error('Data load error:', err);
   }
 }
@@ -633,10 +759,88 @@ function getWeekLabel() {
 // ── STATE ────────────────────────────────────────────────────────────────────
 let orders = [];
 let customData = {};   // { orderNum: { digits: [{desc, qty}] } }
+
+// ── DIGIT OVERRIDE LAYER ─────────────────────────────────────────────────────
+// Additive only. { [order.id]: { digits: [{item, qty, color}], note, savedAt } }
+// An order WITHOUT an entry here behaves exactly as before — the model's digit
+// list from the Google Sheet drives everything. An order WITH an entry bypasses
+// the sheet for that order only, and each digit row carries its OWN color, which
+// is what makes a mixed-color outdoor board (e.g. "score digits AMBER, all other
+// digits RED") representable. The sheet is never written to; overrides are marked
+// on-screen and in print so a deviation from spec is always visible.
+// color: 'RED' | 'AMBER' | '' (ignored for indoor models — all rows go to INDOOR)
+let overrides = {};
+let overrideEditing = null;   // order.id currently open in the editor (transient, not persisted)
+
 let currentView = 'order'; // 'order' | 'summary' | 'handmade'
 let currentOrderIdx = -1;
 let lineListingRows = [];
 let lineSort = { key: 'group', dir: 'asc' }; // default: outdoor group then indoor
+// navContext: when set, Prev/Next in order detail steps through a filtered subset
+// (e.g. all Outdoor Amber orders, or all orders using a specific digit type).
+// Set by clicking a stat card or a digit row in the Summary. Cleared by ✕ Exit filter.
+let navContext = null; // { label: string, ids: [order.id, ...] } | null
+
+// ── PRODUCTION RUN / POOL STATE ──────────────────────────────────────────────
+// Each order in `orders` is the master POOL. runStatus tracks production-run state:
+//   'in_run'  — matched on production list, building now
+//   'held'    — in pool but absent from production run (e.g. JUNE 22 holdover)
+//   'shotclock' — shot-clock model absent from production (expected, suppressed noise)
+//   'changed' — matched but qty/model differs
+//   null      — no production list processed yet (pool-only)
+let runActive = false;            // has a production list been processed this session?
+let runLabel = '';                // label for the production run
+let pendingRush = [];             // [{order, qty, model, color, etn, etnSize, date}] awaiting confirm
+let totalsView = 'run';           // 'run' | 'pool' — which set the report totals reflect
+
+// Models considered shot clocks (knowingly omitted from production lists)
+const SHOTCLOCK_MODELS = new Set(['LX2160','LX2150','LX2170','LX2180','LX2120','LX2158']);
+function isShotClock(model) {
+  const base = model.replace(/S$/,''); // tolerate singular suffix
+  return SHOTCLOCK_MODELS.has(model) || SHOTCLOCK_MODELS.has(base);
+}
+
+// ── PERSISTENCE LAYER (isolated; swap to Vercel KV / Sheets later) ────────────
+// Only this module touches storage. To move server-side, reimplement save/load.
+const STORE_KEY = 'ems_digit_pool_v1';
+const Persist = {
+  save() {
+    try {
+      const snapshot = {
+        orders, customData, overrides, runActive, runLabel, pendingRush, totalsView,
+        dates: {
+          d1: (document.getElementById('date1')||{}).value || '',
+          d2: (document.getElementById('date2')||{}).value || '',
+          note: (document.getElementById('dateNote')||{}).value || '',
+        },
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(STORE_KEY, JSON.stringify(snapshot));
+    } catch (e) { /* storage unavailable — silent */ }
+  },
+  load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return false;
+      const s = JSON.parse(raw);
+      orders      = s.orders || [];
+      customData  = s.customData || {};
+      overrides   = s.overrides || {};   // absent in pre-override saves — loads clean
+      runActive   = s.runActive || false;
+      runLabel    = s.runLabel || '';
+      pendingRush = s.pendingRush || [];
+      totalsView  = s.totalsView || 'run';
+      if (s.dates) {
+        const d1=document.getElementById('date1'), d2=document.getElementById('date2'), dn=document.getElementById('dateNote');
+        if (d1) d1.value = s.dates.d1||''; if (d2) d2.value = s.dates.d2||''; if (dn) dn.value = s.dates.note||'';
+      }
+      return orders.length > 0 || pendingRush.length > 0;
+    } catch (e) { return false; }
+  },
+  clear() {
+    try { localStorage.removeItem(STORE_KEY); } catch(e){}
+  }
+};
 
 // These are rebuilt after loadAllData() populates DB
 let hmOutdoor = new Set();
@@ -659,9 +863,90 @@ function isIndoor(model) {
   return !!DB.indoor_digits[model];
 }
 function isCustom(model) { return model.startsWith('LXCUSTOM'); }
+
+// ── OVERRIDE HELPERS ─────────────────────────────────────────────────────────
+// MIXED = this order's digits are colored per-row by an override, not by o.color.
+function isMixed(o)     { return o.color === 'MIXED'; }
+function hasOverride(o) { return !!overrides[o.id]; }
+
+// Seed rows for the editor: the model's sheet digits, each pre-colored with the
+// order's color (RED for a MIXED outdoor board — flip the exceptions from there).
+function seedOverrideRows(o) {
+  const ind = isIndoor(o.model);
+  const defColor = ind ? '' : (o.color === 'AMBER' ? 'AMBER' : 'RED');
+  if (isCustom(o.model)) {
+    const cd = customData[o.id];
+    return (cd?.digits || []).filter(d => d.qty > 0).map(d => ({ item: d.desc, qty: d.qty, color: defColor }));
+  }
+  const digits = getDigits(o.model) || [];
+  return digits.map(d => ({ item: d.digit, qty: d.qty, color: defColor }));
+}
+
+// Digit list the rest of the app should use for an order: override wins, else sheet.
+function effectiveDigits(o) {
+  const ov = overrides[o.id];
+  if (ov) return ov.digits.filter(d => d.qty > 0).map(d => ({ item: d.item, qty: d.qty, color: d.color || '' }));
+  return null; // null = no override; caller falls back to its existing path
+}
 function isHandmade(model) { return hmOutdoor.has(model) || hmIndoor.has(model); }
 function hasHandmadeDigits(model) {
   return !!(hmOutdoorDigits[model] || hmIndoorDigits[model]);
+}
+
+// ── NAV CONTEXT & CLICKABLE UI HELPERS ───────────────────────────────────────
+// lineModelIsHandmade: true if this order has any in-house digits (custom-aware).
+function lineModelIsHandmade(o) {
+  if (isCustom(o.model)) {
+    const cd = customData[o.id];
+    if (!cd?.digits?.length) return false;
+    const ind = isIndoor(o.model);
+    const hmNames = new Set(ind ? DB.custom_indoor_handmade : DB.custom_outdoor_handmade);
+    return cd.digits.some(d => d.qty > 0 && hmNames.has(d.desc));
+  }
+  return hasHandmadeDigits(o.model);
+}
+
+// Enter a filtered nav context (e.g. clicking "Outdoor Amber" stat card).
+// Prev/Next in order detail will step through only the listed ids.
+function enterNavContext(label, ids) {
+  if (!ids.length) return;
+  navContext = { label, ids };
+  const idx = orders.findIndex(o => o.id === ids[0]);
+  if (idx < 0) return;
+  selectOrder(idx, true);
+}
+
+// Returns the ids of active orders that contribute to a given digit column + name.
+// Used to make digit rows in Digit Totals clickable.
+function ordersForDigit(sectionKey, digitName) {
+  return activeOrders().filter(o => {
+    const ind = isIndoor(o.model);
+    const noColor = !ind && !isCustom(o.model) && o.color !== 'RED' && o.color !== 'AMBER' && o.color !== 'MIXED';
+    if (noColor) return false; // no-color outdoor contributes to no column
+    const section = ind ? 'indoor' : (o.color === 'RED' ? 'red' : 'amber');
+    if (section !== sectionKey) return false;
+    // Override path: check override digits if present
+    const ovDigits = effectiveDigits(o);
+    if (ovDigits) return ovDigits.some(d => d.item === digitName && d.qty > 0);
+    if (isCustom(o.model)) {
+      const cd = customData[o.id];
+      return !!cd?.digits?.some(d => d.desc === digitName && d.qty > 0);
+    }
+    const digits = getDigits(o.model);
+    return !!digits?.some(d => d.digit === digitName);
+  }).map(o => o.id);
+}
+
+// Renders a stat card — clickable if ids.length > 0, greyed if not.
+function statCardHtml(num, color, label, ids) {
+  const safeLabel = label.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const colorStyle = color ? ` style="color:${color}"` : '';
+  if (!ids.length) {
+    return `<div class="stat-card disabled"><div class="num"${colorStyle}>${num}</div><div class="lbl">${label}</div></div>`;
+  }
+  return `<div class="stat-card" style="cursor:pointer" onclick='enterNavContext("${safeLabel}", ${JSON.stringify(ids)})'>
+    <div class="num"${colorStyle}>${num}</div><div class="lbl">${label}</div>
+  </div>`;
 }
 
 // ── PARSE INPUT ──────────────────────────────────────────────────────────────
@@ -679,6 +964,9 @@ function parseManualInput() {
     const order  = parts[1].replace(/^order[:\s]*/i,'').trim();
     const qty    = parseInt(parts[2]) || 1;
     const model  = parts[3].toUpperCase();
+    // COLOR accepts AMBER | RED | MIXED | blank(indoor). MIXED means the board
+    // carries both digit colors (rare — per LINE SPEC) and MUST be resolved with a
+    // per-digit override; it is flagged until one is saved.
     const color  = (parts[4] || '').toUpperCase();
     const etnRaw = (parts[5] || '').toUpperCase();
     const etnSize = (parts[6] || '').toUpperCase();
@@ -686,27 +974,141 @@ function parseManualInput() {
 
     if (!order || !model) { skipped++; return; }
 
-    // Avoid exact duplicates
-    if (orders.find(o => o.order === order && o.model === model && o.qty === qty)) {
-      skipped++; return;
-    }
-    orders.push({ date, order, qty, model, color, etn, etnSize, id: order + '_' + model + '_' + Date.now() });
+    // NOTE: Multiple lines with the same order + model + qty are NOT duplicates —
+    // multi-site orders routinely have the same model repeated under one order number
+    // (e.g. order 92746 with 6+ identical LX2655 lines for different schools). Every
+    // pasted line is a real board and must be added. Do not collapse these.
+    orders.push({ date, order, qty, model, color, etn, etnSize, id: order + '_' + model + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,7) });
     added++;
   });
 
   document.getElementById('parseInfo').textContent = `${added} order(s) added${skipped ? `, ${skipped} skipped` : ''}.`;
   document.getElementById('manualInput').value = '';
+  orders.forEach(o => { if (o.runStatus === undefined) o.runStatus = null; });
+  Persist.save();
   renderFlagsPanel();
   if (orders.length > 0) showView('summary');
 }
 
+// ── PRODUCTION LIST PARSE + MATCH ────────────────────────────────────────────
+// Accepts the same paste format (DATE, ORDER, QTY, MODEL, COLOR, ETN, ETN_SIZE).
+// Matches against the master pool by ORDER + MODEL. Assigns run statuses,
+// routes unmatched production rows to the pending-rush box.
+function parseProductionInput() {
+  const raw = document.getElementById('prodInput').value.trim();
+  if (!raw) return;
+  const lines = raw.split('\n').filter(l => l.trim());
+
+  // Build production set
+  const prod = [];
+  lines.forEach(line => {
+    const parts = line.split(',').map(p => p.trim());
+    if (parts.length < 4) return;
+    const date  = parts[0].toUpperCase();
+    const order = parts[1].replace(/^order[:\s]*/i,'').trim();
+    const qty   = parseInt(parts[2]) || 1;
+    let model   = parts[3].toUpperCase();
+    if (/^\d/.test(model)) model = 'LX' + model; // production omits LX prefix
+    const color = (parts[4]||'').toUpperCase();
+    const etnRaw= (parts[5]||'').toUpperCase();
+    const etnSize=(parts[6]||'').toUpperCase();
+    const etn   = etnRaw === 'TRUE' || etnRaw === '1';
+    if (!order || !model) return;
+    prod.push({ date, order, qty, model, color, etn, etnSize });
+  });
+
+  // Reset prior run state
+  orders.forEach(o => o.runStatus = null);
+  pendingRush = [];
+  runActive = true;
+  runLabel = prod[0]?.date || 'PRODUCTION RUN';
+
+  const prodMatched = new Set();
+
+  // Match each pool order against production
+  orders.forEach(o => {
+    const hit = prod.find((p,i) => p.order === o.order && p.model === o.model && !prodMatched.has(i));
+    if (hit) {
+      const idx = prod.indexOf(hit);
+      prodMatched.add(idx);
+      // Detect qty change
+      o.runStatus = (hit.qty !== o.qty) ? 'changed' : 'in_run';
+      o.runProdQty = hit.qty;
+    } else {
+      // Not in this production run
+      o.runStatus = isShotClock(o.model) ? 'shotclock' : 'held';
+      o.runProdQty = null;
+    }
+  });
+
+  // Unmatched production rows → rush pending (skip ones that matched on order alone but diff model? treat as rush)
+  prod.forEach((p,i) => {
+    if (!prodMatched.has(i)) {
+      // Was the order number in the pool under a different model? Note that for context.
+      const sameOrderDiffModel = orders.find(o => o.order === p.order && o.model !== p.model);
+      pendingRush.push({ ...p, note: sameOrderDiffModel ? `Order ${p.order} exists in pool as ${sameOrderDiffModel.model}` : 'Not on any standard list' });
+    }
+  });
+
+  totalsView = 'run';
+  Persist.save();
+  document.getElementById('prodInfo').textContent =
+    `Run "${runLabel}" applied. ${orders.filter(o=>o.runStatus==='in_run'||o.runStatus==='changed').length} in run, ` +
+    `${orders.filter(o=>o.runStatus==='held').length} held, ${pendingRush.length} pending.`;
+  document.getElementById('prodInput').value = '';
+  renderFlagsPanel();
+  showView('summary');
+}
+
+function confirmRush(i) {
+  const r = pendingRush[i];
+  if (!r) return;
+  orders.push({ ...r, runStatus: 'in_run', runProdQty: r.qty, id: r.order + '_' + r.model + '_' + Date.now() });
+  pendingRush.splice(i,1);
+  Persist.save();
+  renderFlagsPanel();
+  if (currentView==='summary') renderSummary();
+}
+function dismissRush(i) {
+  pendingRush.splice(i,1);
+  Persist.save();
+  renderFlagsPanel();
+}
+function clearRun() {
+  runActive = false; runLabel=''; pendingRush=[];
+  orders.forEach(o => { o.runStatus = null; o.runProdQty = null; });
+  totalsView = 'pool';
+  Persist.save();
+  renderFlagsPanel();
+  if (currentView==='summary') renderSummary();
+}
+function setTotalsView(v) {
+  totalsView = v;
+  Persist.save();
+  renderSummary();
+}
+
+// Orders that count toward the active view
+function activeOrders() {
+  if (totalsView === 'pool' || !runActive) return orders;
+  return orders.filter(o => o.runStatus === 'in_run' || o.runStatus === 'changed');
+}
+
 // ── CLEAR ────────────────────────────────────────────────────────────────────
 function clearAll() {
-  if (!confirm('Clear all orders?')) return;
-  orders = []; customData = {}; currentOrderIdx = -1;
+  if (!confirm('Clear all orders, the pool, any production run, and all digit overrides? This cannot be undone.')) return;
+  orders = []; customData = {}; overrides = {}; overrideEditing = null; currentOrderIdx = -1;
+  runActive = false; runLabel=''; pendingRush=[]; totalsView='run';
+  Persist.clear();
   renderOrderList();
   document.getElementById('content').innerHTML = '<div class="empty-state"><p>All cleared.</p></div>';
   document.getElementById('parseInfo').textContent = '';
+  const pi = document.getElementById('prodInfo'); if (pi) pi.textContent='';
+  // Also reset the truck-list week fields and header label — these aren't part of
+  // the pool/run state but should clear alongside it so stale dates don't linger.
+  const d1 = document.getElementById('date1'), d2 = document.getElementById('date2'), dn = document.getElementById('dateNote');
+  if (d1) d1.value = ''; if (d2) d2.value = ''; if (dn) dn.value = '';
+  updateWeekLabel();
 }
 
 // ── ORDER LIST ───────────────────────────────────────────────────────────────
@@ -725,7 +1127,7 @@ function computeFlags() {
   }
 
   // 2. CUSTOM orders missing digit entry
-  const customPending = orders.filter(o => isCustom(o.model) && !customData[o.order + '_' + o.model]);
+  const customPending = orders.filter(o => isCustom(o.model) && !customData[o.id]);
   if (customPending.length) {
     flags.push({
       sev: 'high', icon: '✎', title: 'Custom order needs digits',
@@ -734,9 +1136,20 @@ function computeFlags() {
     });
   }
 
+  // 2b. MIXED-color boards with no override saved yet — totals are incomplete
+  const mixedPending = orders.filter(o => isMixed(o) && !hasOverride(o));
+  if (mixedPending.length) {
+    flags.push({
+      sev: 'high', icon: '🎨', title: 'Mixed-color board needs digit override',
+      detail: 'These boards carry both RED and AMBER digits per the LINE SPEC. Open each one and set the color on every digit row — they contribute nothing to the totals until you do.',
+      orders: mixedPending, jumpToOrder: true
+    });
+  }
+
   // 3. Orders with no color set on an outdoor-data model
   const noColor = orders.filter(o => {
     if (isCustom(o.model)) return false;
+    if (isMixed(o)) return false;  // handled by the mixed-color flag above
     if (o.color === 'AMBER' || o.color === 'RED') return false;
     // Blank color but the model lives in the OUTDOOR table → ambiguous
     return !!DB.outdoor_digits[o.model] && !DB.indoor_digits[o.model];
@@ -759,15 +1172,15 @@ function computeFlags() {
     });
   }
 
-  // 5. Duplicate order numbers across lines (informational)
-  const byOrder = {};
-  orders.forEach(o => { (byOrder[o.order] = byOrder[o.order] || []).push(o); });
-  const dupes = Object.entries(byOrder).filter(([, list]) => list.length > 1);
-  if (dupes.length) {
+  // 5. Audit trail — any order whose digits deviate from the Google Sheet spec.
+  //    Informational (never counted as an issue) but always visible: an overridden
+  //    order must never be able to hide.
+  const overridden = orders.filter(o => hasOverride(o));
+  if (overridden.length) {
     flags.push({
-      sev: 'info', icon: '⧉', title: 'Order # on multiple lines',
-      detail: 'Same order number appears more than once — valid for multi-model orders, but worth a glance.',
-      orders: dupes.map(([num, list]) => ({ order: num, model: list.map(x => x.model).join(' + '), qty: list.reduce((s,x)=>s+x.qty,0) }))
+      sev: 'info', icon: '✎', title: 'Digits overridden (not per model spec)',
+      detail: 'These orders use hand-entered digit rows instead of the model data from the Google Sheet. Open one to review or revert it.',
+      orders: overridden, jumpToOrder: true
     });
   }
 
@@ -798,7 +1211,7 @@ function renderFlagsPanel() {
   countEl.className = 'flags-count ' + (totalIssues > 0 ? 'has-issues' : 'all-clear');
 
   el.innerHTML = flags.map(f => {
-    const idxOf = o => orders.findIndex(x => x.order === o.order && x.model === o.model);
+    const idxOf = o => orders.findIndex(x => x.id === o.id);
     const chips = f.orders.map(o => {
       const i = idxOf(o);
       const label = `#${o.order} ${o.model}`;
@@ -831,9 +1244,10 @@ function showView(view) {
   }
 }
 
-function selectOrder(i) {
+function selectOrder(i, keepContext) {
   currentOrderIdx = i;
   currentView = 'order';
+  if (!keepContext) navContext = null;
   ['summaryBtn','handmadeBtn'].forEach(id => document.getElementById(id)?.classList.remove('active'));
   renderOrderDetail(i);
 }
@@ -848,7 +1262,20 @@ function renderOrderDetail(i) {
   const etn = o.etn ? getETN(o.model) : null;
 
   let digitSection = '';
-  if (cust) {
+  if (overrideEditing === o.id) {
+    digitSection = renderOverrideEditor(o);
+  } else if (hasOverride(o)) {
+    digitSection = renderOverrideView(o);
+  } else if (isMixed(o)) {
+    digitSection = `<div class="alert alert-warn">
+        🎨 <strong>Mixed-color board.</strong> Per the LINE SPEC this board carries both RED and AMBER digits,
+        so the model's single-color digit list can't be used as-is. Set the color on each digit row —
+        this order contributes nothing to the totals until you do.
+      </div>
+      <div style="margin-bottom:12px">
+        <button class="btn btn-primary btn-sm" onclick="startOverride('${o.id}')">✎ Set Digit Colors</button>
+      </div>`;
+  } else if (cust) {
     digitSection = renderCustomPicker(o);
   } else {
     const digits = getDigits(o.model);
@@ -882,18 +1309,46 @@ function renderOrderDetail(i) {
       `<div class="etn-stat"><div class="label">Half ETN</div><div class="value">${etn.half_size} × ${etn.half_qty}</div></div>` : '<div></div>'}
   </div></div>` : '';
 
+  // Prev/Next: step through filtered navContext if active, else full pool.
+  let prevBtn = '', nextBtn = '', contextLabel = '';
+  if (navContext) {
+    const pos = navContext.ids.indexOf(o.id);
+    if (pos >= 0) {
+      contextLabel = `<div class="view-sub" style="margin-top:3px;color:var(--accent)">${navContext.label} · ${pos+1} of ${navContext.ids.length} <button class="flag-jump" style="margin-left:6px" onclick="navContext=null; selectOrder(${i});">✕ Exit filter</button></div>`;
+      if (pos > 0) {
+        const prevIdx = orders.findIndex(x => x.id === navContext.ids[pos-1]);
+        if (prevIdx >= 0) prevBtn = `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${prevIdx}, true)">← Prev</button>`;
+      }
+      if (pos < navContext.ids.length - 1) {
+        const nextIdx = orders.findIndex(x => x.id === navContext.ids[pos+1]);
+        if (nextIdx >= 0) nextBtn = `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${nextIdx}, true)">Next →</button>`;
+      }
+    }
+  } else {
+    if (i > 0) prevBtn = `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${i-1})">← Prev</button>`;
+    if (i < orders.length-1) nextBtn = `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${i+1})">Next →</button>`;
+  }
+
+  const hmTitle = isHandmade(o.model) ? ' <span style="font-size:0.7rem;color:var(--green);font-family:\'IBM Plex Mono\',monospace;letter-spacing:1px">IN-HOUSE</span>' : '';
+
   document.getElementById('content').innerHTML = `
     <div class="view-header">
       <div>
-        <div class="view-title" style="${colorStyle}">${o.model}</div>
+        <div class="view-title" style="${colorStyle}">${o.model}${hmTitle}</div>
         <div class="view-sub">Order #${o.order} · <span style="${colorStyle}">${colorLabel}</span> · ×${o.qty}${o.etn ? ' · <span style="color:var(--blue)">ETN '+o.etnSize+'</span>' : ''}</div>
+        ${contextLabel}
       </div>
       <div class="nav-btns">
-        ${i > 0 ? `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${i-1})">← Prev</button>` : ''}
-        ${i < orders.length-1 ? `<button class="btn btn-secondary btn-sm" onclick="selectOrder(${i+1})">Next →</button>` : ''}
+        ${prevBtn}
+        ${nextBtn}
       </div>
     </div>
     ${digitSection}
+    ${overrideEditing === o.id || isMixed(o) || hasOverride(o) ? '' : `
+      <div style="margin:-4px 0 12px">
+        <button class="btn btn-secondary btn-sm" onclick="startOverride('${o.id}')">✎ Edit / Split Digit Colors</button>
+        <span style="font-size:0.72rem;color:var(--muted);margin-left:8px">Adjust qty, add/remove a digit, or split RED/AMBER for this order only</span>
+      </div>`}
     ${etnHtml}
     <div class="alert alert-info" style="margin-top:12px;font-size:0.78rem">
       <strong>Type:</strong> ${ind ? 'Indoor' : 'Outdoor'} &nbsp;·&nbsp;
@@ -901,12 +1356,161 @@ function renderOrderDetail(i) {
     </div>`;
 }
 
+// ── DIGIT OVERRIDE EDITOR ────────────────────────────────────────────────────
+// Opens pre-filled with the model's digit list from the Google Sheet so the common
+// case is a few clicks, not data entry. Nothing is written back to the sheet.
+let overrideDraft = [];   // working copy while the editor is open
+
+function startOverride(id) {
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  const ov = overrides[id];
+  overrideDraft = ov
+    ? ov.digits.map(d => ({ ...d }))
+    : seedOverrideRows(o);
+  overrideEditing = id;
+  const idx = orders.findIndex(x => x.id === id);
+  currentOrderIdx = idx;
+  renderOrderDetail(idx);
+}
+
+function cancelOverride() {
+  const id = overrideEditing;
+  overrideEditing = null;
+  overrideDraft = [];
+  const idx = orders.findIndex(x => x.id === id);
+  if (idx >= 0) renderOrderDetail(idx);
+}
+
+function ovSetQty(i, v)   { overrideDraft[i].qty = Math.max(0, parseFloat(v) || 0); }
+function ovSetColor(i, v) { overrideDraft[i].color = v; redrawOverrideEditor(); }
+function ovDelete(i)      { overrideDraft.splice(i, 1); redrawOverrideEditor(); }
+function ovAddRow() {
+  const o = orders.find(x => x.id === overrideEditing);
+  const ind = o ? isIndoor(o.model) : false;
+  overrideDraft.push({ item: '', qty: 1, color: ind ? '' : 'RED', isNew: true });
+  redrawOverrideEditor();
+}
+function ovSetItem(i, v)  { overrideDraft[i].item = v; }
+function ovSetAllColor(c) { overrideDraft.forEach(d => d.color = c); redrawOverrideEditor(); }
+
+function redrawOverrideEditor() {
+  const idx = orders.findIndex(x => x.id === overrideEditing);
+  if (idx >= 0) renderOrderDetail(idx);
+}
+
+function saveOverride() {
+  const id = overrideEditing;
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  const noteEl = document.getElementById('ovNote');
+  const rows = overrideDraft
+    .map(d => ({ item: (d.item || '').trim(), qty: Number(d.qty) || 0, color: d.color || '' }))
+    .filter(d => d.item && d.qty > 0);
+  if (!rows.length) { alert('Add at least one digit row with a quantity before saving.'); return; }
+  overrides[id] = { digits: rows, note: (noteEl?.value || '').trim(), savedAt: Date.now() };
+  overrideEditing = null;
+  overrideDraft = [];
+  Persist.save();
+  renderFlagsPanel();
+  renderOrderDetail(orders.findIndex(x => x.id === id));
+}
+
+// Revert to spec: drop the override entirely; the order falls straight back onto
+// the Google Sheet model data (or the custom picker) with no residue.
+function revertOverride(id) {
+  if (!confirm('Revert this order to the model spec from the Google Sheet? The override will be discarded.')) return;
+  delete overrides[id];
+  overrideEditing = null;
+  overrideDraft = [];
+  Persist.save();
+  renderFlagsPanel();
+  renderOrderDetail(orders.findIndex(x => x.id === id));
+}
+
+function renderOverrideEditor(o) {
+  const ind = isIndoor(o.model);
+  const saved = overrides[o.id];
+  const colorSel = (i, val) => ind
+    ? `<span style="font-size:0.7rem;color:var(--blue);font-family:'IBM Plex Mono',monospace">INDOOR</span>`
+    : `<select class="ov-select" onchange="ovSetColor(${i}, this.value)">
+         <option value="RED"${val==='RED'?' selected':''}>RED</option>
+         <option value="AMBER"${val==='AMBER'?' selected':''}>AMBER</option>
+       </select>`;
+
+  const rows = overrideDraft.map((d, i) => {
+    const cls = ind ? '' : (d.color === 'AMBER' ? ' ov-row-amber' : ' ov-row-red');
+    const nameCell = d.isNew
+      ? `<input type="text" class="ov-input" placeholder="Digit item name (must match sheet)" value="${d.item || ''}" oninput="ovSetItem(${i}, this.value)">`
+      : `<span class="ov-row-name">${d.item}</span>`;
+    return `<div class="ov-row${cls}${d.isNew ? ' ov-row-new' : ''}">
+      ${nameCell}
+      <input type="number" class="ov-input" min="0" step="1" value="${d.qty}" onchange="ovSetQty(${i}, this.value)" oninput="ovSetQty(${i}, this.value)">
+      ${colorSel(i, d.color)}
+      <button class="ov-del" onclick="ovDelete(${i})" title="Remove row">×</button>
+    </div>`;
+  }).join('');
+
+  const bulk = ind ? '' : `
+    <button class="btn btn-secondary btn-sm" onclick="ovSetAllColor('RED')">All → RED</button>
+    <button class="btn btn-secondary btn-sm" onclick="ovSetAllColor('AMBER')">All → AMBER</button>`;
+
+  return `<div class="card">
+    <div class="card-header">✎ Digit Override — ${o.model} · Order #${o.order} · ×${o.qty}</div>
+    <div class="ov-bar">
+      <button class="btn btn-secondary btn-sm" onclick="ovAddRow()">+ Add digit</button>
+      ${bulk}
+      <span style="flex:1"></span>
+      <button class="btn btn-secondary btn-sm" onclick="cancelOverride()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveOverride()">✓ Save Override</button>
+    </div>
+    <div class="ov-head-labels"><span>Digit Item</span><span>Qty / Board</span><span>Color</span><span></span></div>
+    ${rows || '<div style="padding:14px;font-size:0.78rem;color:var(--muted)">No rows — click “+ Add digit”.</div>'}
+    <div style="padding:10px 12px;border-top:1px solid var(--border)">
+      <div style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;margin-bottom:4px">NOTE (prints on the report)</div>
+      <input type="text" class="ov-input" id="ovNote" placeholder="e.g. Per LINE SPEC: score digits AMBER, all other digits RED"
+        value="${saved?.note || ''}">
+    </div>
+    <div style="padding:8px 12px;border-top:1px solid var(--border);font-size:0.72rem;color:var(--muted)">
+      Quantities are <strong>per board</strong> — they're multiplied by the order qty (×${o.qty}) in the totals.
+      Digit item names must match the Google Sheet exactly so they merge into the right totals row.
+    </div>
+  </div>`;
+}
+
+function renderOverrideView(o) {
+  const ov = overrides[o.id];
+  const ind = isIndoor(o.model);
+  const chip = d => {
+    const c = ind ? 'var(--blue)' : (d.color === 'AMBER' ? 'var(--amber)' : 'var(--red)');
+    return `<tr>
+      <td style="color:${c}">${d.item}</td>
+      <td class="mono" style="color:${c};font-size:0.7rem">${ind ? 'INDOOR' : d.color}</td>
+      <td><span class="qty-pill" style="background:rgba(46,204,113,0.1);color:var(--green)">${Math.round(d.qty * o.qty)}</span></td>
+    </tr>`;
+  };
+  return `<div class="card">
+    <div class="card-header">📋 Digits Required <span class="color-tag override">OVERRIDE</span></div>
+    <div class="card-body">
+      ${ov.note ? `<div class="alert alert-info" style="font-size:0.78rem;margin-bottom:10px">📝 ${ov.note}</div>` : ''}
+      <table><thead><tr><th>Digit Type</th><th>Color</th><th>Total Needed</th></tr></thead>
+      <tbody>${ov.digits.map(chip).join('')}</tbody></table>
+      <div style="display:flex;gap:6px;margin-top:12px">
+        <button class="btn btn-secondary btn-sm" onclick="startOverride('${o.id}')">✎ Edit Override</button>
+        <button class="btn btn-danger btn-sm" onclick="revertOverride('${o.id}')">↺ Revert to Spec</button>
+      </div>
+      <div style="margin-top:8px;font-size:0.72rem;color:var(--muted)">
+        This order does not use the ${o.model} digit list from the Google Sheet. The sheet is unchanged.
+      </div>
+    </div></div>`;
+}
+
 // ── CUSTOM PICKER ─────────────────────────────────────────────────────────────
 function renderCustomPicker(o) {
   const ind = isIndoor(o.model);
   const standard = ind ? DB.custom_indoor_standard : DB.custom_outdoor_standard;
   const handmade = ind ? DB.custom_indoor_handmade : DB.custom_outdoor_handmade;
-  const key = o.order + '_' + o.model;
+  const key = o.id;
   const safeKey = key.replace(/[^a-zA-Z0-9]/g,'_');
   const saved = customData[key] || { digits: [], etn: {} };
   const savedMap = {};
@@ -1010,7 +1614,7 @@ function onPickerChange(input) {
   tot.innerHTML = qty > 0
     ? `<span class="qty-pill" style="background:rgba(46,204,113,0.1);color:var(--green)">= ${qty * o.qty}</span>`
     : '';
-  const key = o.order + '_' + o.model;
+  const key = o.id;
   const footerEl = document.getElementById('pfooter_' + key.replace(/[^a-zA-Z0-9]/g,'_'));
   if (footerEl) footerEl.innerHTML = renderPickerSummaryLive(o, key);
 }
@@ -1027,7 +1631,7 @@ function renderPickerSummaryLive(o, key) {
 }
 
 function renderPickerSummary(o) {
-  const key = o.order + '_' + o.model;
+  const key = o.id;
   const cd = customData[key];
   if (!cd?.digits?.some(d=>d.qty>0)) return '<span style="color:var(--muted);font-size:0.78rem">No digits selected yet</span>';
   return `<div style="display:flex;flex-wrap:wrap;gap:6px">
@@ -1036,7 +1640,7 @@ function renderPickerSummary(o) {
 }
 
 function saveCustomDigits(key) {
-  const o = orders.find(o => (o.order+'_'+o.model) === key);
+  const o = orders.find(o => o.id === key);
   if (!o) return;
   const safeKey = key.replace(/[^a-zA-Z0-9]/g,'_');
   const inputs = document.querySelectorAll(`#picker_${safeKey} .picker-qty-input`);
@@ -1082,13 +1686,31 @@ function computeTotals() {
   const amber = {}, red = {}, indoor = {};
   const addTo = (map, digit, qty) => { map[digit] = (map[digit]||0) + qty; };
 
-  orders.forEach(o => {
+  activeOrders().forEach(o => {
     const ind = isIndoor(o.model);
     const cust = isCustom(o.model);
+    // No-color outdoor: not indoor per the sheet, but no AMBER/RED set yet.
+    // Contribute nothing — flagged med, same posture as unresolved MIXED.
+    const noColor = !ind && !cust && o.color !== 'RED' && o.color !== 'AMBER' && o.color !== 'MIXED';
     const map = ind ? indoor : (o.color==='RED' ? red : amber);
 
+    // OVERRIDE PATH — each digit row carries its own color.
+    const ovDigits = effectiveDigits(o);
+    if (ovDigits) {
+      if (noColor) return;
+      ovDigits.forEach(d => {
+        const m = ind ? indoor : (d.color === 'RED' ? red : amber);
+        addTo(m, d.item, d.qty * o.qty);
+      });
+      return;
+    }
+    if (isMixed(o)) return;
+    if (noColor) return;
+
+    // ── everything below is the original path, untouched ──
+
     if (cust) {
-      const key = o.order + '_' + o.model;
+      const key = o.id;
       const cd = customData[key];
       if (cd?.digits) {
         cd.digits.forEach(d => { if(d.qty>0) addTo(map, d.desc, d.qty * o.qty); });
@@ -1104,8 +1726,10 @@ function computeTotals() {
 
 // ── LINE LISTING (sortable) ───────────────────────────────────────────────────
 function lineColorTag(o) {
+  if (o.color === 'MIXED') return '<span class="color-tag mixed">MIXED</span>';
   if (o.color === 'AMBER') return '<span class="color-tag amber">AMBER</span>';
   if (o.color === 'RED')   return '<span class="color-tag red">RED</span>';
+  if (!isIndoor(o.model) && !isCustom(o.model)) return '<span class="color-tag" style="background:rgba(224,92,42,0.12);color:var(--accent2)">NO COLOR</span>';
   return '<span class="color-tag indoor">INDOOR</span>';
 }
 
@@ -1123,7 +1747,7 @@ function sortLineListing(key) {
 function renderLineListing() {
   const rows = [...lineListingRows];
   const dir = lineSort.dir === 'asc' ? 1 : -1;
-  const colorRank = { 'AMBER': 0, 'RED': 1, '': 2 };
+  const colorRank = { 'AMBER': 0, 'RED': 1, 'MIXED': 2, '': 3 };
 
   const cmp = {
     date:  (a,b) => (a.date||'').localeCompare(b.date||'') * dir,
@@ -1139,15 +1763,14 @@ function renderLineListing() {
     // Default grouped view: Outdoor section then Indoor section, each by order #
     const out = rows.filter(r => !r.indoor).sort((a,b)=>a.order.localeCompare(b.order));
     const ind = rows.filter(r =>  r.indoor).sort((a,b)=>a.order.localeCompare(b.order));
-    if (out.length) body += '<tr class="tl-section-row"><td colspan="6">Outdoor</td></tr>' + out.map(lineRowHtml).join('');
-    if (ind.length) body += '<tr class="tl-section-row"><td colspan="6">Indoor</td></tr>'  + ind.map(lineRowHtml).join('');
+    if (out.length) body += sectionHeaderHtml('Outdoor', 'outdoor') + out.map(o => lineRowHtml(o, 'outdoor')).join('');
+    if (ind.length) body += sectionHeaderHtml('Indoor', 'indoor')  + ind.map(o => lineRowHtml(o, 'indoor')).join('');
   } else {
     rows.sort(cmp[lineSort.key]);
     body = rows.map(lineRowHtml).join('');
   }
 
   const arrow = k => lineSort.key === k ? (lineSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
-  const groupActive = lineSort.key === 'group' ? ' th-active' : '';
   return `<div class="tl-card" id="lineListingWrap"><table class="tl-table">
     <thead><tr>
       <th class="th-sort${lineSort.key==='date'?' th-active':''}" onclick="sortLineListing('date')">Date${arrow('date')}</th>
@@ -1157,29 +1780,187 @@ function renderLineListing() {
       <th class="th-sort${lineSort.key==='color'?' th-active':''}" onclick="sortLineListing('color')">Color${arrow('color')}</th>
       <th class="th-sort${lineSort.key==='etn'?' th-active':''}" onclick="sortLineListing('etn')">ETN Size${arrow('etn')}</th>
     </tr>
-    <tr class="th-grouprow"><td colspan="6"><button class="group-toggle${groupActive}" onclick="sortLineListing('group')">⊞ Group by Outdoor / Indoor</button></td></tr>
     </thead><tbody>${body}</tbody></table></div>`;
 }
 
-function lineRowHtml(o) {
-  return `<tr>
-    <td class="mono" style="color:var(--muted);font-size:0.75rem">${o.date || '—'}</td>
-    <td class="mono">${o.order}</td>
-    <td class="mono">×${o.qty}</td>
-    <td><strong>${o.model}</strong>${o.custom?' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>':''}</td>
-    <td>${lineColorTag(o)}</td>
-    <td class="mono">${o.etn ? (o.etnSize || 'ETN') : '—'}</td>
+// Section divider row ("Outdoor" / "Indoor") with its own expand/collapse-all toggle.
+// sectionKey scopes the toggle to just the rows in that section.
+function sectionHeaderHtml(label, sectionKey) {
+  return `<tr class="tl-section-row" data-section="${sectionKey}">
+    <td colspan="6">
+      <button class="tl-section-toggle" id="tlSectionBtn_${sectionKey}" onclick="toggleSectionDetails('${sectionKey}')" title="Expand/collapse ${label}">+</button>
+      <span>${label}</span>
+    </td>
   </tr>`;
 }
 
+function lineRowHtml(o, sectionKey) {
+  const safeId = String(o.id).replace(/[^a-zA-Z0-9]/g,'_');
+  const secAttr = sectionKey ? ` data-section="${sectionKey}"` : '';
+  const hm = lineModelIsHandmade(o);
+  return `<tr class="tl-row" id="tlrow_${safeId}"${secAttr} onclick="toggleLineDetail('${o.id}')">
+    <td class="mono" style="color:var(--muted);font-size:0.75rem"><span class="tl-chevron" id="tlchev_${safeId}">▸</span> ${o.date || '—'}</td>
+    <td class="mono">${o.order}</td>
+    <td class="mono">×${o.qty}</td>
+    <td><strong${hm ? ' style="color:var(--green)"' : ''}>${o.model}</strong>${o.custom?' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>':''}${o.override?' <span class="color-tag override">OVERRIDE</span>':''}</td>
+    <td>${lineColorTag(o)}</td>
+    <td class="mono">${o.etn ? (o.etnSize || 'ETN') : '—'}</td>
+  </tr>
+  <tr class="tl-detail-row" id="tldetail_${safeId}"${secAttr} style="display:none"><td colspan="6"></td></tr>`;
+}
+
+// Expand/collapse a line-listing row to show its digit breakdown.
+// Reuses the same digit lookup as the Order Detail view (standard / custom / handmade).
+// Keyed by the order's unique `id` (never order+model) so duplicate-model multi-site
+// lines and custom orders sharing an order number never collide.
+function toggleLineDetail(id) {
+  const safeId = String(id).replace(/[^a-zA-Z0-9]/g,'_');
+  const detailRow = document.getElementById('tldetail_' + safeId);
+  const chev = document.getElementById('tlchev_' + safeId);
+  const rowEl = document.getElementById('tlrow_' + safeId);
+  if (!detailRow) return;
+
+  const isOpen = detailRow.style.display !== 'none';
+  if (isOpen) {
+    detailRow.style.display = 'none';
+    detailRow.querySelector('td').innerHTML = '';
+    if (chev) chev.textContent = '▸';
+    if (rowEl) rowEl.classList.remove('tl-row-open');
+    return;
+  }
+
+  const o = lineListingRows.find(r => r.id === id);
+  if (!o) return;
+  detailRow.querySelector('td').innerHTML = renderLineDigitDetail(o);
+  detailRow.style.display = '';
+  if (chev) chev.textContent = '▾';
+  if (rowEl) rowEl.classList.add('tl-row-open');
+}
+
+// Expand or collapse every row within a single section (Outdoor or Indoor).
+function toggleSectionDetails(sectionKey) {
+  const sectionRows = lineListingRows.filter(r => (r.indoor ? 'indoor' : 'outdoor') === sectionKey);
+  const anyOpen = sectionRows.some(r => {
+    const el = document.getElementById('tldetail_' + String(r.id).replace(/[^a-zA-Z0-9]/g,'_'));
+    return el && el.style.display !== 'none';
+  });
+  sectionRows.forEach(r => {
+    const safeId = String(r.id).replace(/[^a-zA-Z0-9]/g,'_');
+    const detailRow = document.getElementById('tldetail_' + safeId);
+    const chev = document.getElementById('tlchev_' + safeId);
+    const rowEl = document.getElementById('tlrow_' + safeId);
+    if (!detailRow) return;
+    if (anyOpen) {
+      detailRow.style.display = 'none';
+      detailRow.querySelector('td').innerHTML = '';
+      if (chev) chev.textContent = '▸';
+      if (rowEl) rowEl.classList.remove('tl-row-open');
+    } else {
+      detailRow.querySelector('td').innerHTML = renderLineDigitDetail(r);
+      detailRow.style.display = '';
+      if (chev) chev.textContent = '▾';
+      if (rowEl) rowEl.classList.add('tl-row-open');
+    }
+  });
+  const btn = document.getElementById('tlSectionBtn_' + sectionKey);
+  if (btn) btn.textContent = anyOpen ? '+' : '−';
+}
+
+// Builds the digit-breakdown panel shown inside an expanded line-listing row.
+function renderLineDigitDetail(o) {
+  // Override wins over both the custom picker and the sheet's model data.
+  const ov = overrides[o.id];
+  if (ov) {
+    const ind = isIndoor(o.model);
+    const chips = ov.digits.filter(d => d.qty > 0).map(d => {
+      const c = ind ? 'var(--blue)' : (d.color === 'AMBER' ? 'var(--amber)' : 'var(--red)');
+      return `<div class="tl-chip" style="border-left:3px solid ${c}">
+        <span class="tl-chip-name">${d.item}</span>
+        <span class="tl-chip-qty">${Math.round(d.qty * o.qty)}</span>
+      </div>`;
+    }).join('');
+    const note = ov.note ? `<div class="tl-digit-group-label" style="text-transform:none;letter-spacing:0">📝 ${ov.note}</div>` : '';
+    return `<div class="tl-detail-panel">
+      <div class="tl-digit-group-label">Overridden — not per ${o.model} sheet spec</div>
+      ${note}
+      <div class="tl-digit-row">${chips}</div>
+    </div>`;
+  }
+
+  if (isMixed(o)) {
+    const idx = orders.findIndex(x => x.id === o.id);
+    return `<div class="tl-detail-empty">Mixed-color board — no digit override entered yet. <button class="flag-jump" onclick="event.stopPropagation(); selectOrder(${idx})">Set digit colors →</button></div>`;
+  }
+
+  if (o.custom) {
+    const cd = customData[o.id];
+    if (!cd?.digits?.some(d => d.qty > 0)) {
+      const idx = orders.findIndex(x => x.id === o.id);
+      return `<div class="tl-detail-empty">No digits entered yet for this CUSTOM order. <button class="flag-jump" onclick="event.stopPropagation(); selectOrder(${idx})">Enter digits →</button></div>`;
+    }
+    // Custom digit picker already separates standard vs. in-house items into
+    // DB.custom_outdoor_handmade / DB.custom_indoor_handmade lists — reuse those
+    // to group the same way as standard models below.
+    const ind = isIndoor(o.model);
+    const hmNames = new Set(ind ? DB.custom_indoor_handmade : DB.custom_outdoor_handmade);
+    const entries = cd.digits.filter(d => d.qty > 0);
+    const standard = entries.filter(d => !hmNames.has(d.desc));
+    const handmade = entries.filter(d =>  hmNames.has(d.desc));
+    return buildDigitDetailHtml(standard, handmade, o.qty, d => d.desc, d => d.qty);
+  }
+
+  const digits = getDigits(o.model);
+  if (!digits) {
+    return `<div class="tl-detail-empty">No digit data found for <strong>${o.model}</strong>. Check the Model Data tab.</div>`;
+  }
+
+  const hmDigits = hmOutdoorDigits[o.model] || hmIndoorDigits[o.model] || [];
+  const hmSet = new Set(hmDigits.map(d => d.digit));
+  const standard = digits.filter(d => !hmSet.has(d.digit));
+  const handmade = digits.filter(d =>  hmSet.has(d.digit));
+  return buildDigitDetailHtml(standard, handmade, o.qty, d => d.digit, d => d.qty);
+}
+
+// Shared chip-group builder for the line-listing expand panel. Standard digits
+// render first as plain chips; handmade/in-house digits (if any) render below a
+// labeled divider in green so they're unmistakable regardless of how many chips
+// are on screen — matches the same standard/in-house split used in Digit Totals.
+function buildDigitDetailHtml(standardItems, handmadeItems, orderQty, getName, getPerUnitQty) {
+  const chip = (item, isHm) => {
+    const total = Math.round(getPerUnitQty(item) * orderQty);
+    return `<div class="tl-chip${isHm ? ' tl-chip-hm' : ''}">
+      <span class="tl-chip-name">${getName(item)}</span>
+      <span class="tl-chip-qty">${total}</span>
+    </div>`;
+  };
+
+  const standardHtml = standardItems.length
+    ? `<div class="tl-digit-row">${standardItems.map(d => chip(d, false)).join('')}</div>`
+    : '';
+
+  const handmadeHtml = handmadeItems.length
+    ? `<div class="tl-digit-group">
+        <div class="tl-digit-group-label">In-House Digits</div>
+        <div class="tl-digit-row">${handmadeItems.map(d => chip(d, true)).join('')}</div>
+      </div>`
+    : '';
+
+  return `<div class="tl-detail-panel">${standardHtml}${handmadeHtml}</div>`;
+}
+
 function renderSummary() {
+  const view = activeOrders();
   const { amber, red, indoor } = computeTotals();
-  const outdoorCount = orders.filter(o => !isIndoor(o.model)).reduce((s,o)=>s+o.qty,0);
-  const indoorCount  = orders.filter(o =>  isIndoor(o.model)).reduce((s,o)=>s+o.qty,0);
-  const amberCount   = orders.filter(o => o.color==='AMBER').reduce((s,o)=>s+o.qty,0);
-  const redCount     = orders.filter(o => o.color==='RED').reduce((s,o)=>s+o.qty,0);
-  const etnCount     = orders.filter(o => o.etn).reduce((s,o)=>s+o.qty,0);
-  const customPending= orders.filter(o => isCustom(o.model) && !customData[o.order+'_'+o.model]).length;
+  const outdoorCount = view.filter(o => !isIndoor(o.model)).reduce((s,o)=>s+o.qty,0);
+  const indoorCount  = view.filter(o =>  isIndoor(o.model)).reduce((s,o)=>s+o.qty,0);
+  const amberCount   = view.filter(o => o.color==='AMBER').reduce((s,o)=>s+o.qty,0);
+  const redCount     = view.filter(o => o.color==='RED').reduce((s,o)=>s+o.qty,0);
+  const etnCount     = view.filter(o => o.etn).reduce((s,o)=>s+o.qty,0);
+  const mixedCount   = view.filter(o => isMixed(o)).reduce((s,o)=>s+o.qty,0);
+  const customPending= view.filter(o => isCustom(o.model) && !customData[o.id] && !hasOverride(o)).length;
+  const etnNoSize    = view.filter(o => o.etn && !o.etnSize && !isCustom(o.model)).length;
+  const mixedPending = view.filter(o => isMixed(o) && !hasOverride(o)).length;
+  const overriddenCt = view.filter(o => hasOverride(o)).length;
 
   // Handmade digit-type names (sink these to the bottom of each digit column)
   const hmDigitNames = new Set([
@@ -1195,8 +1976,16 @@ function renderSummary() {
     // Standard digits first (alpha), then handmade digits (alpha) at the bottom
     const standard = all.filter(([d]) => !isHmDigit(d)).sort((a,b)=>a[0].localeCompare(b[0]));
     const handmade = all.filter(([d]) =>  isHmDigit(d)).sort((a,b)=>a[0].localeCompare(b[0]));
-    const stdRows = standard.map(([d,q])=>`<tr><td>${d}</td><td class="${qtyClass}">${Math.round(q)}</td></tr>`).join('');
-    const hmRows  = handmade.map(([d,q])=>`<tr class="dg-hm-row"><td>${d} <span class="dg-hm-tag">IN-HOUSE</span></td><td class="${qtyClass}">${Math.round(q)}</td></tr>`).join('');
+    const digitRow = (d, q, hm) => {
+      const ids = ordersForDigit(cls, d);
+      const safeLabel = (`${title} — ${d}`).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      const onclick = ids.length ? ` onclick='enterNavContext("${safeLabel}", ${JSON.stringify(ids)})'` : '';
+      const rowClass = hm ? ' class="dg-hm-row"' : '';
+      const nameCell = hm ? `${d} <span class="dg-hm-tag">IN-HOUSE</span>` : d;
+      return `<tr${rowClass}${onclick} style="${ids.length?'cursor:pointer':''}"><td>${nameCell}</td><td class="${qtyClass}">${Math.round(q)}</td></tr>`;
+    };
+    const stdRows = standard.map(([d,q])=>digitRow(d, q, false)).join('');
+    const hmRows  = handmade.map(([d,q])=>digitRow(d, q, true)).join('');
     const divider = (standard.length && handmade.length) ? `<tr class="dg-divider"><td colspan="2">In-House Digits</td></tr>` : '';
     return `<div class="dg-col-panel"><div class="dg-col-header ${cls}">${title}</div>
       <table class="dg-table"><tbody>
@@ -1208,26 +1997,28 @@ function renderSummary() {
 
   // ── Order line listing (sortable) ──
   // Store all rows globally so header clicks can re-sort without recomputing the report
-  lineListingRows = orders.map(o => ({
-    date: o.date || '', order: o.order, qty: o.qty, model: o.model, color: o.color,
+  lineListingRows = view.map(o => ({
+    id: o.id, date: o.date || '', order: o.order, qty: o.qty, model: o.model, color: o.color,
     etn: o.etn, etnSize: o.etnSize,
-    indoor: isIndoor(o.model), custom: isCustom(o.model)
+    indoor: isIndoor(o.model), custom: isCustom(o.model), override: hasOverride(o)
   }));
   const lineTable = renderLineListing();
 
   // ── ETN section ──
   const colorTag = o => {
+    if (o.color === 'MIXED') return '<span class="color-tag mixed">MIXED</span>';
     if (o.color === 'AMBER') return '<span class="color-tag amber">AMBER</span>';
     if (o.color === 'RED')   return '<span class="color-tag red">RED</span>';
+    if (!isIndoor(o.model) && !isCustom(o.model)) return '<span class="color-tag" style="background:rgba(224,92,42,0.12);color:var(--accent2)">NO COLOR</span>';
     return '<span class="color-tag indoor">INDOOR</span>';
   };
-  const etnOrders = orders.filter(o => o.etn);
+  const etnOrders = view.filter(o => o.etn);
   let etnSection = '';
   if (etnOrders.length) {
     const etnRow = o => {
       const cust = isCustom(o.model);
       const e  = cust ? {} : (getETN(o.model) || {});
-      const cd = cust ? (customData[o.order+'_'+o.model]?.etn || {}) : {};
+      const cd = cust ? (customData[o.id]?.etn || {}) : {};
       const panelSize = cust
         ? (cd.size || o.etnSize || '—')
         : (o.etnSize || e.upgrade_size || '—');
@@ -1254,15 +2045,91 @@ function renderSummary() {
       <tbody>${etnOrders.map(etnRow).join('')}</tbody></table></div>`;
   }
 
+  // ── Run controls + reconciliation ──
+  const heldOrders  = orders.filter(o => o.runStatus === 'held');
+  const shotHeld    = orders.filter(o => o.runStatus === 'shotclock');
+  const changedOrd  = orders.filter(o => o.runStatus === 'changed');
+  const poolTotal   = orders.reduce((s,o)=>s+o.qty,0);
+  const runTotal    = orders.filter(o=>o.runStatus==='in_run'||o.runStatus==='changed').reduce((s,o)=>s+o.qty,0);
+
+  let runControls = '';
+  if (runActive) {
+    const tag = (label, n, color) => n>0 ? `<span class="recon-pill" style="background:${color}22;color:${color}">${label}: ${n}</span>` : '';
+    runControls = `
+    <div class="run-bar">
+      <div class="run-bar-left">
+        <span class="run-badge">PRODUCTION RUN${runLabel?`: ${runLabel}`:''}</span>
+        <div class="run-toggle">
+          <button class="${totalsView==='run'?'rt-active':''}" onclick="setTotalsView('run')">This Run (${runTotal})</button>
+          <button class="${totalsView==='pool'?'rt-active':''}" onclick="setTotalsView('pool')">Full Pool (${poolTotal})</button>
+        </div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="clearRun()">End Run</button>
+    </div>
+    <div class="recon-strip">
+      ${tag('In run', orders.filter(o=>o.runStatus==='in_run').length, '#22c55e')}
+      ${tag('Changed', changedOrd.length, '#f59e0b')}
+      ${tag('Held', heldOrders.length, '#3b82f6')}
+      ${tag('Shot clocks held', shotHeld.length, '#8b5cf6')}
+      ${tag('Pending rush', pendingRush.length, '#e05c2a')}
+      ${tag('Custom awaiting digits', customPending, '#ef4444')}
+      ${tag('Mixed awaiting override', mixedPending, '#ef4444')}
+      ${tag('ETN awaiting size', etnNoSize, '#ef4444')}
+      ${tag('Overridden', overriddenCt, '#8b5cf6')}
+    </div>`;
+  } else {
+    runControls = `<div class="recon-strip">
+      ${customPending>0?`<span class="recon-pill" style="background:#ef444422;color:#ef4444">Custom awaiting digits: ${customPending}</span>`:''}
+      ${mixedPending>0?`<span class="recon-pill" style="background:#ef444422;color:#ef4444">Mixed awaiting override: ${mixedPending}</span>`:''}
+      ${etnNoSize>0?`<span class="recon-pill" style="background:#ef444422;color:#ef4444">ETN awaiting size: ${etnNoSize}</span>`:''}
+      ${overriddenCt>0?`<span class="recon-pill" style="background:#8b5cf622;color:#8b5cf6">Overridden: ${overriddenCt}</span>`:''}
+      ${pendingRush.length>0?`<span class="recon-pill" style="background:#e05c2a22;color:#e05c2a">Pending rush: ${pendingRush.length}</span>`:''}
+    </div>`;
+  }
+
+  // Pending rush box
+  let pendingBox = '';
+  if (pendingRush.length) {
+    pendingBox = `<div class="pending-box">
+      <div class="pending-head">⏳ Pending Rush Orders — on production list but not in the pool</div>
+      ${pendingRush.map((r,i)=>`<div class="pending-row">
+        <div class="pending-info"><strong>${r.order}</strong> · ×${r.qty} · ${r.model} ${r.color?`· ${r.color}`:''} <span class="pending-note">${r.note||''}</span></div>
+        <div class="pending-actions">
+          <button class="btn btn-primary btn-sm" onclick="confirmRush(${i})">+ Add to report</button>
+          <button class="btn btn-secondary btn-sm" onclick="dismissRush(${i})">Dismiss</button>
+        </div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  // Held listing (collapsed detail)
+  let heldBox = '';
+  if (runActive && (heldOrders.length || shotHeld.length)) {
+    const rowsH = [...heldOrders, ...shotHeld].map(o =>
+      `<tr><td class="mono">${o.order}</td><td class="mono">×${o.qty}</td><td><strong>${o.model}</strong></td>
+       <td>${o.runStatus==='shotclock'?'<span class="color-tag" style="background:#8b5cf622;color:#8b5cf6">SHOT CLOCK</span>':'<span class="color-tag" style="background:#3b82f622;color:#3b82f6">HELD</span>'}</td>
+       <td style="color:var(--muted);font-size:0.75rem">${o.date||'—'}</td></tr>`).join('');
+    heldBox = `<div class="section-label-lg">Held — Not in This Production Run</div>
+      <div class="tl-card"><table class="tl-table">
+      <thead><tr><th>Order</th><th>Qty</th><th>Model</th><th>Status</th><th>Date</th></tr></thead>
+      <tbody>${rowsH}</tbody></table></div>`;
+  }
+
   document.getElementById('content').innerHTML = `
     <div class="view-header"><div><div class="view-title">EMS Digit Report</div>${weekLabel ? `<div class="view-sub">${weekLabel}</div>` : ''}</div></div>
+    ${runControls}
+    ${pendingBox}
     ${customPending>0 ? `<div class="alert alert-warn">⚠ ${customPending} CUSTOM order(s) have no digit data entered yet — totals are incomplete.</div>` : ''}
+    ${mixedPending>0 ? `<div class="alert alert-warn">⚠ ${mixedPending} MIXED-color board(s) have no digit override entered yet — their digits are NOT in these totals.</div>` : ''}
+    ${etnNoSize>0 ? `<div class="alert alert-warn">⚠ ${etnNoSize} ETN order(s) flagged but missing a panel size — verify from paperwork.</div>` : ''}
+    ${overriddenCt>0 ? `<div class="alert alert-info">✎ ${overriddenCt} order(s) use overridden digits (not the model spec from the Google Sheet). Marked OVERRIDE in the line listing.</div>` : ''}
     <div class="summary-grid">
-      <div class="stat-card"><div class="num">${outdoorCount+indoorCount}</div><div class="lbl">Total Boards</div></div>
-      <div class="stat-card"><div class="num" style="color:var(--amber)">${amberCount}</div><div class="lbl">Outdoor Amber</div></div>
-      <div class="stat-card"><div class="num" style="color:var(--red)">${redCount}</div><div class="lbl">Outdoor Red</div></div>
-      <div class="stat-card"><div class="num" style="color:var(--blue)">${indoorCount}</div><div class="lbl">Indoor</div></div>
-      <div class="stat-card"><div class="num" style="color:#3b82f6">${etnCount}</div><div class="lbl">ETN Boards</div></div>
+      ${statCardHtml(outdoorCount+indoorCount, '', totalsView==='pool'?'Pool Boards':'Boards This Run', view.map(o=>o.id))}
+      ${statCardHtml(amberCount, 'var(--amber)', 'Outdoor Amber', view.filter(o=>o.color==='AMBER' && !isIndoor(o.model)).map(o=>o.id))}
+      ${statCardHtml(redCount, 'var(--red)', 'Outdoor Red', view.filter(o=>o.color==='RED' && !isIndoor(o.model)).map(o=>o.id))}
+      ${statCardHtml(indoorCount, 'var(--blue)', 'Indoor', view.filter(o=>isIndoor(o.model)).map(o=>o.id))}
+      ${statCardHtml(etnCount, '#3b82f6', 'ETN Boards', view.filter(o=>o.etn).map(o=>o.id))}
+      ${mixedCount>0 ? statCardHtml(mixedCount, 'var(--accent2)', 'Mixed Color', view.filter(o=>isMixed(o)).map(o=>o.id)) : ''}
     </div>
     <div class="section-label-lg">Digit Totals</div>
     <div class="dg-columns">
@@ -1272,12 +2139,14 @@ function renderSummary() {
     </div>
     ${etnSection}
     <div class="section-label-lg">Order Line Listing</div>
-    ${lineTable}`;
+    ${lineTable}
+    ${heldBox}`;
 }
 
 // ── HANDMADE ─────────────────────────────────────────────────────────────────
 function renderHandmade() {
-  const hmOrders = orders.filter(o => {
+  const view = activeOrders();
+  const hmOrders = view.filter(o => {
     if (isCustom(o.model)) return false;
     return hmOutdoor.has(o.model) || hmIndoor.has(o.model);
   });
@@ -1288,44 +2157,127 @@ function renderHandmade() {
     return;
   }
 
-  const makeCard = o => {
+  // Aggregate handmade digits the same way Digit Totals does: AMBER / RED / INDOOR maps
+  const amber = {}, red = {}, indoor = {};
+  hmOrders.forEach(o => {
     const ind = isIndoor(o.model);
+    const noColor = !ind && !isCustom(o.model) && o.color !== 'RED' && o.color !== 'AMBER' && o.color !== 'MIXED';
+    const map = ind ? indoor : (o.color === 'RED' ? red : amber);
     const hmDigits = hmOutdoorDigits[o.model] || hmIndoorDigits[o.model] || [];
-    const colorLabel = o.color ? `${o.color} DIGITS` : '';
-    const colorStyle = o.color==='AMBER' ? 'color:var(--amber)' : o.color==='RED' ? 'color:var(--red)' : 'color:var(--blue)';
-    const multi = o.qty > 1;
-    const chips = hmDigits.map(d => {
-      const total = d.qty * o.qty;
-      if (multi) {
-        // Order qty > 1: DIGIT ×perBoard = total
-        return `<div class="hm-chip"><span>${d.digit}</span><span style="color:var(--muted)">×${d.qty}</span><span class="cqty">= ${total}</span></div>`;
-      }
-      // Order qty 1
-      if (d.qty > 1) {
-        // Single board, multiple of one digit: DIGIT = qty
-        return `<div class="hm-chip"><span>${d.digit}</span><span class="cqty">= ${d.qty}</span></div>`;
-      }
-      // Single board, single digit: just the name
-      return `<div class="hm-chip"><span>${d.digit}</span></div>`;
-    }).join('');
-    const metaQty = multi ? ` · ×${o.qty}` : '';
-    return `<div class="hm-order-card">
-      <div class="hm-order-row">
-        <span class="hm-order-model" style="${colorStyle}">${o.model}</span>
-        <span class="hm-order-meta">#${o.order}${metaQty}${colorLabel ? ' · ' + colorLabel : ''}</span>
-      </div>
-      <div class="hm-digit-chips">${chips}</div>
-    </div>`;
+
+    const ovDigits = effectiveDigits(o);
+    if (ovDigits) {
+      if (noColor) return;
+      const hmNames = new Set(hmDigits.map(d => d.digit));
+      ovDigits.filter(d => hmNames.has(d.item)).forEach(d => {
+        const m = ind ? indoor : (d.color === 'RED' ? red : amber);
+        m[d.item] = (m[d.item] || 0) + d.qty * o.qty;
+      });
+      return;
+    }
+    if (isMixed(o)) return;   // unresolved mixed — contributes nothing
+    if (noColor) return;       // no color set — contributes nothing (flagged med)
+
+    hmDigits.forEach(d => {
+      map[d.digit] = (map[d.digit] || 0) + d.qty * o.qty;
+    });
+  });
+
+  // Same column builder shape as Digit Totals' makeCol
+  const makeCol = (title, cls, map, qtyClass) => {
+    const all = Object.entries(map).sort((a,b)=>a[0].localeCompare(b[0]));
+    if (!all.length) return `<div class="dg-col-panel"><div class="dg-col-header ${cls}">${title}</div><div style="padding:14px;font-size:0.78rem;color:var(--muted)">None this week</div></div>`;
+    const rows = all.map(([d,q])=>`<tr><td>${d}</td><td class="${qtyClass}">${Math.round(q)}</td></tr>`).join('');
+    return `<div class="dg-col-panel"><div class="dg-col-header ${cls}">${title}</div>
+      <table class="dg-table"><tbody>${rows}</tbody></table></div>`;
   };
 
-  const outdoorCards = hmOrders.filter(o => !isIndoor(o.model));
-  const indoorCards  = hmOrders.filter(o =>  isIndoor(o.model));
+  // ── Per-order breakdown ──
+  // One card per order, bucketed by color group, sorted by order# within each.
+  // Override-aware and MIXED-aware — same logic as the aggregate above.
+  const colorGroupRank = o => {
+    if (isMixed(o)) return 2;
+    if (o.color === 'AMBER') return 0;
+    if (o.color === 'RED') return 1;
+    return 3; // indoor / no-color
+  };
+  const sortedHmOrders = [...hmOrders].sort((a, b) => {
+    const gr = colorGroupRank(a) - colorGroupRank(b);
+    if (gr !== 0) return gr;
+    return a.order.localeCompare(b.order);
+  });
+
+  const orderCards = sortedHmOrders.map(o => {
+    const ind = isIndoor(o.model);
+    const hmDigits = hmOutdoorDigits[o.model] || hmIndoorDigits[o.model] || [];
+    const hmNames = new Set(hmDigits.map(d => d.digit));
+
+    // Determine which digit rows apply to this order (override-aware)
+    let chips = '';
+    if (isMixed(o) && !hasOverride(o)) {
+      chips = `<div style="color:var(--muted);font-size:0.75rem;margin-top:6px">Mixed-color — override not yet set; excluded from totals.</div>`;
+    } else {
+      const ovDigits = effectiveDigits(o);
+      let rows;
+      if (ovDigits) {
+        rows = ovDigits.filter(d => hmNames.has(d.item) && d.qty > 0).map(d => ({
+          name: d.item,
+          perBoard: d.qty,
+          total: Math.round(d.qty * o.qty),
+          color: ind ? '' : (d.color || ''),
+        }));
+      } else {
+        rows = hmDigits.map(d => ({
+          name: d.digit,
+          perBoard: d.qty,
+          total: Math.round(d.qty * o.qty),
+          color: ind ? '' : o.color,
+        }));
+      }
+      chips = rows.length
+        ? `<div class="hm-digit-chips">${rows.map(r => {
+            const accentColor = r.color === 'AMBER' ? 'var(--amber)' : r.color === 'RED' ? 'var(--red)' : 'var(--blue)';
+            const perBoardNote = o.qty > 1 ? `<span style="color:var(--muted);font-size:0.68rem">${r.perBoard}/ea</span>` : '';
+            return `<div class="hm-chip" style="border-left:2px solid ${accentColor}">
+              <span>${r.name}</span>${perBoardNote}<span class="cqty">${r.total}</span>
+            </div>`;
+          }).join('')}</div>`
+        : `<div style="color:var(--muted);font-size:0.75rem;margin-top:6px">No in-house digit data for this model.</div>`;
+    }
+
+    const _ind = isIndoor(o.model);
+    const _noColor = !_ind && !isCustom(o.model) && o.color !== 'RED' && o.color !== 'AMBER' && o.color !== 'MIXED';
+    const colorTagHtml = isMixed(o)
+      ? '<span class="color-tag mixed">MIXED</span>'
+      : o.color === 'AMBER' ? '<span class="color-tag amber">AMBER</span>'
+      : o.color === 'RED'   ? '<span class="color-tag red">RED</span>'
+      : _noColor ? '<span class="color-tag" style="background:rgba(224,92,42,0.12);color:var(--accent2)">NO COLOR</span>'
+      : '<span class="color-tag indoor">INDOOR</span>';
+
+    const overrideTag = hasOverride(o) ? ' <span class="color-tag override">OVERRIDE</span>' : '';
+    const borderColor = o.color === 'AMBER' ? 'var(--amber)' : o.color === 'RED' ? 'var(--red)' : isMixed(o) ? 'var(--accent2)' : _noColor ? 'var(--accent2)' : 'var(--blue)';
+
+    return `<div class="hm-order-card" style="border-left-color:${borderColor}">
+      <div class="hm-order-row">
+        <span class="hm-order-model">${o.model}</span>
+        ${colorTagHtml}${overrideTag}
+        <span class="hm-order-meta">Order ${o.order} · ×${o.qty} · ${o.date || '—'}</span>
+      </div>
+      ${chips}
+    </div>`;
+  }).join('');
 
   const weekLabel = getWeekLabel();
   document.getElementById('content').innerHTML = `
     <div class="view-header"><div><div class="view-title">EMS Digit Report — Handmade</div>${weekLabel ? `<div class="view-sub">${weekLabel}</div>` : ''}</div></div>
-    ${outdoorCards.length ? `<div class="hm-section-title" style="color:var(--amber)">Outdoor</div>${outdoorCards.map(makeCard).join('')}` : ''}
-    ${indoorCards.length  ? `<div class="hm-section-title" style="color:var(--blue)">Indoor</div>${indoorCards.map(makeCard).join('')}` : ''}`;
+    <div class="section-label-lg">Handmade (In-House) Digit Totals</div>
+    <div class="dg-columns">
+      ${makeCol('AMBER','amber',amber,'amber-qty')}
+      ${makeCol('RED','red',red,'red-qty')}
+      ${makeCol('INDOOR','indoor',indoor,'indoor-qty')}
+    </div>
+    <div class="section-label-lg">Orders with Handmade Digits</div>
+    ${orderCards}`;
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
