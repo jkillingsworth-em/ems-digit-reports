@@ -328,6 +328,7 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 .ov-row:hover { background: var(--surface2); }
 .ov-row-red   { border-left-color: var(--red); }
 .ov-row-amber { border-left-color: var(--amber); }
+.ov-row-dup   { background: rgba(224,92,42,0.07); }
 .ov-row-name  { font-size: 0.8rem; }
 .ov-row-new .ov-row-name::after {
   content: 'ADDED'; margin-left: 6px; font-family: 'IBM Plex Mono', monospace;
@@ -1511,9 +1512,19 @@ function saveOverride() {
   const o = orders.find(x => x.id === id);
   if (!o) return;
   const noteEl = document.getElementById('ovNote');
-  const rows = overrideDraft
-    .map(d => ({ item: (d.item || '').trim(), qty: Number(d.qty) || 0, color: d.color || '' }))
-    .filter(d => d.item && d.qty > 0);
+  // Merge only rows identical in BOTH name and color — they're indistinguishable
+  // downstream anyway. A shared name with different colors is the whole point of
+  // a split board and is preserved as separate rows.
+  const indOrder = isIndoor(o.model);
+  const merged = [];
+  overrideDraft
+    .map(d => ({ item: (d.item || '').trim(), qty: Number(d.qty) || 0, color: indOrder ? '' : (d.color || '') }))
+    .filter(d => d.item && d.qty > 0)
+    .forEach(d => {
+      const hit = merged.find(m => m.item === d.item && m.color === d.color);
+      if (hit) hit.qty += d.qty; else merged.push(d);
+    });
+  const rows = merged;
   if (!rows.length && !overrideETNDraft.length) { alert('Add at least one digit row or ETN panel before saving.'); return; }
   // ETN rows: drop any row with nothing entered at all, keep the rest verbatim.
   // An empty array is meaningful — it means "this order has no ETN" and clears
@@ -1565,9 +1576,12 @@ function renderOverrideEditor(o) {
   // fetch failed — an empty dropdown would block all work.
   const vocab = (DB.digitVocab || {})[ind ? 'indoor' : 'outdoor'] || { standard: [], handmade: [] };
   const vocabReady = (vocab.standard.length + vocab.handmade.length) > 0;
+  // No name filtering: a split-color board legitimately carries the same digit
+  // on more than one row (e.g. 2 × 18in FULL RED + 4 × 18in FULL AMBER), so
+  // hiding an already-used name would make the second half unreachable.
+  // Rows that end up identical in BOTH name and color are merged on save.
   const digitSelect = (i, val) => {
-    const taken = new Set(overrideDraft.filter((r, j) => j !== i).map(r => (r.item || '').trim()));
-    const opts = list => list.filter(n => n === val || !taken.has(n))
+    const opts = list => list
       .map(n => `<option value="${n}"${n === val ? ' selected' : ''}>${n}</option>`).join('');
     const std = opts(vocab.standard), hm = opts(vocab.handmade);
     return `<select class="ov-select" onchange="ovSetItem(${i}, this.value)">
@@ -1577,6 +1591,16 @@ function renderOverrideEditor(o) {
       </select>`;
   };
 
+  // Same name + same color on two rows is the one real double-count risk.
+  // It is allowed (the qty just sums) but never silent.
+  const dupKeys = {};
+  overrideDraft.forEach(d => {
+    const k = (d.item || '').trim() + '|' + (ind ? '' : (d.color || ''));
+    if ((d.item || '').trim()) dupKeys[k] = (dupKeys[k] || 0) + 1;
+  });
+  const isDupRow = d => dupKeys[(d.item || '').trim() + '|' + (ind ? '' : (d.color || ''))] > 1;
+  const dupCount = overrideDraft.filter(isDupRow).length;
+
   const rows = overrideDraft.map((d, i) => {
     const cls = ind ? '' : (d.color === 'AMBER' ? ' ov-row-amber' : ' ov-row-red');
     const nameCell = d.isNew
@@ -1584,7 +1608,7 @@ function renderOverrideEditor(o) {
           ? digitSelect(i, (d.item || '').trim())
           : `<input type="text" class="ov-input" placeholder="Digit item name (must match sheet)" value="${d.item || ''}" oninput="ovSetItem(${i}, this.value)">`)
       : `<span class="ov-row-name">${d.item}</span>`;
-    return `<div class="ov-row${cls}${d.isNew ? ' ov-row-new' : ''}">
+    return `<div class="ov-row${cls}${d.isNew ? ' ov-row-new' : ''}${isDupRow(d) ? ' ov-row-dup' : ''}">
       ${nameCell}
       <input type="number" class="ov-input" min="0" step="1" value="${d.qty}" onchange="ovSetQty(${i}, this.value)" oninput="ovSetQty(${i}, this.value)">
       ${colorSel(i, d.color)}
@@ -1642,6 +1666,9 @@ function renderOverrideEditor(o) {
       <button class="btn btn-secondary btn-sm" onclick="cancelOverride()">Cancel</button>
       <button class="btn btn-primary btn-sm" onclick="saveOverride()">✓ Save Override</button>
     </div>
+    ${dupCount ? `<div style="padding:6px 12px;font-size:0.72rem;color:var(--accent2);border-bottom:1px solid var(--border)">
+        ⚠ ${dupCount} row(s) share a digit name AND color — those will be added together into one line on save.
+        Same name with different colors is fine and stays split.</div>` : ''}
     <div class="ov-head-labels"><span>Digit Item</span><span>Qty / Board</span><span>Color</span><span></span></div>
     ${rows || '<div style="padding:14px;font-size:0.78rem;color:var(--muted)">No rows — click “+ Add digit”.</div>'}
     ${etnSection}
