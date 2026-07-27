@@ -350,6 +350,27 @@ tr:hover td { background: rgba(255,255,255,0.018); }
   text-transform: uppercase; color: var(--muted);
 }
 @media print { .ov-bar, .ov-del { display: none !important; } }
+.ov-etn-row {
+  display: grid; grid-template-columns: 1fr 1fr 68px 1fr 68px 30px; gap: 8px; align-items: center;
+  padding: 6px 12px; border-bottom: 1px solid var(--border); border-left: 3px solid var(--blue);
+}
+.ov-etn-row:hover { background: var(--surface2); }
+.ov-etn-labels {
+  display: grid; grid-template-columns: 1fr 1fr 68px 1fr 68px 30px; gap: 8px;
+  padding: 6px 12px; background: var(--surface2);
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--muted);
+}
+.ov-section-label {
+  padding: 8px 12px 4px; font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--blue); border-top: 1px solid var(--border);
+}
+.ov-input.up { text-transform: uppercase; }
+.ov-static { font-family: 'IBM Plex Mono', monospace; font-size: 0.76rem; color: var(--muted); }
+.ov-manual-tag {
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.58rem; letter-spacing: 1px;
+  color: var(--accent2);
+}
 
 /* Expandable order-line rows (digit drill-down) */
 .tl-row { cursor: pointer; }
@@ -847,6 +868,28 @@ function rebuildHMSets() {
   hmIndoor  = new Set(DB.handmade_indoor);
   hmOutdoorDigits = DB.handmade_outdoor_digits;
   hmIndoorDigits  = DB.handmade_indoor_digits;
+  buildDigitVocab();
+}
+
+// Digit-name vocabulary for the override editor's "+ Add digit" dropdown.
+// Derived from DB at load time, never hardcoded: the option values ARE the
+// sheet's strings, so a hand-added row merges into the right totals row by
+// construction instead of by the user typing the name correctly. Add a digit
+// type to the sheet and it appears here on next load, no code change.
+function buildDigitVocab() {
+  const uniq = arr => [...new Set(arr.map(s => (s == null ? '' : String(s)).trim()).filter(Boolean))]
+                        .sort((a,b) => a.localeCompare(b));
+  const pull = map => { const out = []; Object.values(map || {}).forEach(list => (list||[]).forEach(d => out.push(d.digit))); return out; };
+  const build = (modelMap, hmMap, custStd, custHm) => {
+    const handmade = uniq([...pull(hmMap), ...(custHm || [])]);
+    const hmSet = new Set(handmade);
+    const standard = uniq([...pull(modelMap), ...(custStd || [])]).filter(n => !hmSet.has(n));
+    return { standard, handmade };
+  };
+  DB.digitVocab = {
+    outdoor: build(DB.outdoor_digits, hmOutdoorDigits, DB.custom_outdoor_standard, DB.custom_outdoor_handmade),
+    indoor:  build(DB.indoor_digits,  hmIndoorDigits,  DB.custom_indoor_standard,  DB.custom_indoor_handmade),
+  };
 }
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -883,6 +926,44 @@ function effectiveDigits(o) {
   if (ov) return ov.digits.filter(d => d.qty > 0).map(d => ({ item: d.item, qty: d.qty, color: d.color || '' }));
   return null; // null = no override; caller falls back to its existing path
 }
+// ── ETN HELPERS ──────────────────────────────────────────────────────────────
+// ETN panels are tracked SEPARATELY from digits — different product, different
+// inventory. An override may carry its own `etns` array, which wins over the
+// order's paste-block ETN flag; that array is what lets an ETN be added to a
+// board that arrived without one, or cleared off one flagged in error.
+// Legacy overrides saved before ETN editing have no `etns` key at all — those
+// fall straight through to the order's own fields, unchanged.
+function etnRowFromSheet(o, panel) {
+  const e = getETN(o.model);
+  const hasHalf = !!(e && e.half_size && e.half_size !== '-' && e.half_size !== '');
+  return {
+    panel:     (panel != null ? panel : (o.etnSize || '')) || '',
+    full_size: e ? (e.full_size || '') : '',
+    full_qty:  e ? (e.full_qty  || '') : '',
+    half_size: hasHalf ? e.half_size : '',
+    half_qty:  hasHalf ? (e.half_qty || '') : '',
+    fromSheet: !!e,
+  };
+}
+
+// The ETN list the rest of the app should use for an order.
+function effectiveETNs(o) {
+  const ov = overrides[o.id];
+  if (ov && Array.isArray(ov.etns)) return ov.etns;
+  if (!o.etn) return [];
+  if (isCustom(o.model)) {
+    const cd = customData[o.id] && customData[o.id].etn ? customData[o.id].etn : {};
+    return [{ panel: cd.size || o.etnSize || '', full_size: '', full_qty: cd.full_qty || '',
+              half_size: '', half_qty: cd.half_qty || '', fromSheet: false }];
+  }
+  return [etnRowFromSheet(o)];
+}
+function orderHasETN(o)    { return effectiveETNs(o).length > 0; }
+function orderETNPanels(o) { return effectiveETNs(o).map(e => (e.panel || '').trim()).filter(Boolean); }
+function orderETNNoPanel(o){ return effectiveETNs(o).some(e => !(e.panel || '').trim()); }
+// True when an ETN row had to be keyed by hand because the model has no ETN row.
+function orderETNManual(o) { return effectiveETNs(o).some(e => !e.fromSheet); }
+
 function isHandmade(model) { return hmOutdoor.has(model) || hmIndoor.has(model); }
 function hasHandmadeDigits(model) {
   return !!(hmOutdoorDigits[model] || hmIndoorDigits[model]);
@@ -1158,12 +1239,23 @@ function computeFlags() {
   }
 
   // 4. ETN flagged but no size present
-  const etnNoSize = orders.filter(o => o.etn && !o.etnSize);
+  const etnNoSize = orders.filter(o => orderETNNoPanel(o));
   if (etnNoSize.length) {
     flags.push({
       sev: 'med', icon: '📐', title: 'ETN upgrade, no panel size',
       detail: 'ETN is flagged but no panel size was captured. Confirm the size from the PDF.',
-      orders: etnNoSize
+      orders: etnNoSize, jumpToOrder: true
+    });
+  }
+
+  // 4b. ETN present on a model that has no ETN row in the sheet — the Full/Half
+  //     data was keyed by hand, so it should stay visible.
+  const etnManual = orders.filter(o => orderHasETN(o) && orderETNManual(o) && !isCustom(o.model));
+  if (etnManual.length) {
+    flags.push({
+      sev: 'info', icon: '📐', title: 'No ETN version of this model exist',
+      detail: 'These orders carry an ETN panel entered by hand — the model has no ETN data to pull from.',
+      orders: etnManual, jumpToOrder: true
     });
   }
 
@@ -1254,7 +1346,7 @@ function renderOrderDetail(i) {
   const cust = isCustom(o.model);
   const colorLabel = o.color ? o.color + ' DIGITS' : 'INDOOR';
   const colorStyle = o.color === 'AMBER' ? 'color:var(--amber)' : o.color === 'RED' ? 'color:var(--red)' : 'color:var(--blue)';
-  const etn = o.etn ? getETN(o.model) : null;
+  const etnList = effectiveETNs(o);
 
   let digitSection = '';
   if (overrideEditing === o.id) {
@@ -1297,12 +1389,11 @@ function renderOrderDetail(i) {
     }
   }
 
-  const etnHtml = etn ? `<div class="etn-box"><h4>ETN Upgrade</h4><div class="etn-grid">
-    <div class="etn-stat"><div class="label">Panel Size</div><div class="value">${o.etnSize || etn.upgrade_size}</div></div>
-    <div class="etn-stat"><div class="label">Full ETN</div><div class="value">${etn.full_size} × ${etn.full_qty}</div></div>
-    ${etn.half_size && etn.half_size !== '-' && etn.half_size !== '' ?
-      `<div class="etn-stat"><div class="label">Half ETN</div><div class="value">${etn.half_size} × ${etn.half_qty}</div></div>` : '<div></div>'}
-  </div></div>` : '';
+  const etnHtml = etnList.map(e => `<div class="etn-box"><h4>ETN Upgrade${e.fromSheet ? '' : ' <span class="ov-manual-tag">MANUAL</span>'}</h4><div class="etn-grid">
+    <div class="etn-stat"><div class="label">Panel Size</div><div class="value">${e.panel || '—'}</div></div>
+    <div class="etn-stat"><div class="label">Full ETN</div><div class="value">${e.full_size || '—'}${e.full_qty ? ' × ' + e.full_qty : ''}</div></div>
+    ${e.half_size ? `<div class="etn-stat"><div class="label">Half ETN</div><div class="value">${e.half_size}${e.half_qty ? ' × ' + e.half_qty : ''}</div></div>` : '<div></div>'}
+  </div></div>`).join('');
 
   // Prev/Next: step through filtered navContext if active, else full pool.
   let prevBtn = '', nextBtn = '', contextLabel = '';
@@ -1330,7 +1421,7 @@ function renderOrderDetail(i) {
     <div class="view-header">
       <div>
         <div class="view-title" style="${colorStyle}">${o.model}${hmTitle}</div>
-        <div class="view-sub">Order #${o.order} · <span style="${colorStyle}">${colorLabel}</span> · ×${o.qty}${o.etn ? ' · <span style="color:var(--blue)">ETN '+o.etnSize+'</span>' : ''}</div>
+        <div class="view-sub">Order #${o.order} · <span style="${colorStyle}">${colorLabel}</span> · ×${o.qty}${etnList.length ? ' · <span style="color:var(--blue)">ETN ' + (orderETNPanels(o).join(', ') || '—') + '</span>' : ''}</div>
         ${contextLabel}
       </div>
       <div class="nav-btns">
@@ -1354,7 +1445,8 @@ function renderOrderDetail(i) {
 // ── DIGIT OVERRIDE EDITOR ────────────────────────────────────────────────────
 // Opens pre-filled with the model's digit list from the Google Sheet so the common
 // case is a few clicks, not data entry. Nothing is written back to the sheet.
-let overrideDraft = [];   // working copy while the editor is open
+let overrideDraft = [];      // digit rows, working copy while the editor is open
+let overrideETNDraft = [];   // ETN rows, kept separate — different product line
 
 function startOverride(id) {
   const o = orders.find(x => x.id === id);
@@ -1363,6 +1455,9 @@ function startOverride(id) {
   overrideDraft = ov
     ? ov.digits.map(d => ({ ...d }))
     : seedOverrideRows(o);
+  // ETN seeds from whatever the order effectively has today (override, paste
+  // block, or custom picker) so opening and saving changes nothing by itself.
+  overrideETNDraft = effectiveETNs(o).map(e => ({ ...e }));
   overrideEditing = id;
   const idx = orders.findIndex(x => x.id === id);
   currentOrderIdx = idx;
@@ -1373,6 +1468,7 @@ function cancelOverride() {
   const id = overrideEditing;
   overrideEditing = null;
   overrideDraft = [];
+  overrideETNDraft = [];
   const idx = orders.findIndex(x => x.id === id);
   if (idx >= 0) renderOrderDetail(idx);
 }
@@ -1386,8 +1482,24 @@ function ovAddRow() {
   overrideDraft.push({ item: '', qty: 1, color: ind ? '' : 'RED', isNew: true });
   redrawOverrideEditor();
 }
-function ovSetItem(i, v)  { overrideDraft[i].item = v; }
+function ovSetItem(i, v)  { overrideDraft[i].item = v; redrawOverrideEditor(); }
 function ovSetAllColor(c) { overrideDraft.forEach(d => d.color = c); redrawOverrideEditor(); }
+
+// ── ETN row actions (separate from digits by design) ──
+function ovAddETN() {
+  const o = orders.find(x => x.id === overrideEditing);
+  if (!o) return;
+  // First row inherits the truck-list panel size; extras start blank.
+  overrideETNDraft.push(etnRowFromSheet(o, overrideETNDraft.length ? '' : (o.etnSize || '')));
+  redrawOverrideEditor();
+}
+function ovSetETN(i, field, v) {
+  if (!overrideETNDraft[i]) return;
+  overrideETNDraft[i][field] = field.endsWith('_qty')
+    ? String(v).replace(/[^0-9]/g, '')
+    : String(v).toUpperCase();
+}
+function ovDeleteETN(i) { overrideETNDraft.splice(i, 1); redrawOverrideEditor(); }
 
 function redrawOverrideEditor() {
   const idx = orders.findIndex(x => x.id === overrideEditing);
@@ -1402,10 +1514,24 @@ function saveOverride() {
   const rows = overrideDraft
     .map(d => ({ item: (d.item || '').trim(), qty: Number(d.qty) || 0, color: d.color || '' }))
     .filter(d => d.item && d.qty > 0);
-  if (!rows.length) { alert('Add at least one digit row with a quantity before saving.'); return; }
-  overrides[id] = { digits: rows, note: (noteEl?.value || '').trim(), savedAt: Date.now() };
+  if (!rows.length && !overrideETNDraft.length) { alert('Add at least one digit row or ETN panel before saving.'); return; }
+  // ETN rows: drop any row with nothing entered at all, keep the rest verbatim.
+  // An empty array is meaningful — it means "this order has no ETN" and clears
+  // an ETN flagged in error, so it is saved rather than treated as absent.
+  const etns = overrideETNDraft
+    .map(e => ({
+      panel:     (e.panel || '').trim().toUpperCase(),
+      full_size: (e.full_size || '').trim().toUpperCase(),
+      full_qty:  (e.full_qty  || '').toString().trim(),
+      half_size: (e.half_size || '').trim().toUpperCase(),
+      half_qty:  (e.half_qty  || '').toString().trim(),
+      fromSheet: !!e.fromSheet,
+    }))
+    .filter(e => e.panel || e.full_size || e.full_qty || e.half_size || e.half_qty);
+  overrides[id] = { digits: rows, etns, note: (noteEl?.value || '').trim(), savedAt: Date.now() };
   overrideEditing = null;
   overrideDraft = [];
+  overrideETNDraft = [];
   Persist.save();
   renderFlagsPanel();
   renderOrderDetail(orders.findIndex(x => x.id === id));
@@ -1418,6 +1544,7 @@ function revertOverride(id) {
   delete overrides[id];
   overrideEditing = null;
   overrideDraft = [];
+  overrideETNDraft = [];
   Persist.save();
   renderFlagsPanel();
   renderOrderDetail(orders.findIndex(x => x.id === id));
@@ -1433,10 +1560,29 @@ function renderOverrideEditor(o) {
          <option value="AMBER"${val==='AMBER'?' selected':''}>AMBER</option>
        </select>`;
 
+  // New rows pick from the sheet's own vocabulary, so the name always merges
+  // into the correct totals row. Falls back to a text input only if the sheet
+  // fetch failed — an empty dropdown would block all work.
+  const vocab = (DB.digitVocab || {})[ind ? 'indoor' : 'outdoor'] || { standard: [], handmade: [] };
+  const vocabReady = (vocab.standard.length + vocab.handmade.length) > 0;
+  const digitSelect = (i, val) => {
+    const taken = new Set(overrideDraft.filter((r, j) => j !== i).map(r => (r.item || '').trim()));
+    const opts = list => list.filter(n => n === val || !taken.has(n))
+      .map(n => `<option value="${n}"${n === val ? ' selected' : ''}>${n}</option>`).join('');
+    const std = opts(vocab.standard), hm = opts(vocab.handmade);
+    return `<select class="ov-select" onchange="ovSetItem(${i}, this.value)">
+        <option value=""${val ? '' : ' selected'}>— select digit —</option>
+        ${std ? `<optgroup label="Standard">${std}</optgroup>` : ''}
+        ${hm  ? `<optgroup label="In-House">${hm}</optgroup>`  : ''}
+      </select>`;
+  };
+
   const rows = overrideDraft.map((d, i) => {
     const cls = ind ? '' : (d.color === 'AMBER' ? ' ov-row-amber' : ' ov-row-red');
     const nameCell = d.isNew
-      ? `<input type="text" class="ov-input" placeholder="Digit item name (must match sheet)" value="${d.item || ''}" oninput="ovSetItem(${i}, this.value)">`
+      ? (vocabReady
+          ? digitSelect(i, (d.item || '').trim())
+          : `<input type="text" class="ov-input" placeholder="Digit item name (must match sheet)" value="${d.item || ''}" oninput="ovSetItem(${i}, this.value)">`)
       : `<span class="ov-row-name">${d.item}</span>`;
     return `<div class="ov-row${cls}${d.isNew ? ' ov-row-new' : ''}">
       ${nameCell}
@@ -1450,6 +1596,43 @@ function renderOverrideEditor(o) {
     <button class="btn btn-secondary btn-sm" onclick="ovSetAllColor('RED')">All → RED</button>
     <button class="btn btn-secondary btn-sm" onclick="ovSetAllColor('AMBER')">All → AMBER</button>`;
 
+  // ── ETN section: separate block, separate Add button. ETN panels are a
+  //    different product for inventory, so they never share rows with digits.
+  const sheetETN = getETN(o.model);
+  const etnRows = overrideETNDraft.map((e, i) => {
+    const sizeCell = field => e.fromSheet
+      ? `<span class="ov-static">${e[field] || '—'}</span>`
+      : `<input type="text" class="ov-input up" placeholder="—" value="${e[field] || ''}" oninput="ovSetETN(${i}, '${field}', this.value)">`;
+    const qtyCell = field =>
+      `<input type="text" inputmode="numeric" class="ov-input" value="${e[field] || ''}" oninput="ovSetETN(${i}, '${field}', this.value)">`;
+    return `<div class="ov-etn-row">
+      <input type="text" class="ov-input up" placeholder="e.g. 9X56" value="${e.panel || ''}" oninput="ovSetETN(${i}, 'panel', this.value)">
+      ${sizeCell('full_size')}
+      ${qtyCell('full_qty')}
+      ${sizeCell('half_size')}
+      ${qtyCell('half_qty')}
+      <button class="ov-del" onclick="ovDeleteETN(${i})" title="Remove ETN">×</button>
+    </div>`;
+  }).join('');
+
+  const etnManual = overrideETNDraft.some(e => !e.fromSheet);
+  const etnSection = `
+    <div class="ov-section-label">ETN Panels</div>
+    ${etnManual ? `<div style="padding:0 12px 6px;font-size:0.72rem;color:var(--accent2)">
+        ⚠ No ETN version of this model exist. Full / Half sizes and quantities are entered by hand.
+      </div>` : ''}
+    ${overrideETNDraft.length ? `<div class="ov-etn-labels">
+        <span>Panel Size</span><span>Full ETN Size</span><span>Full Qty</span><span>Half ETN Size</span><span>Half Qty</span><span></span>
+      </div>${etnRows}` : `<div style="padding:8px 12px 12px;font-size:0.78rem;color:var(--muted)">
+        No ETN on this order.${sheetETN ? '' : ' <span class="ov-manual-tag">NO ETN VERSION OF THIS MODEL EXIST</span>'}
+      </div>`}
+    <div style="padding:8px 12px;border-bottom:1px solid var(--border)">
+      <button class="btn btn-secondary btn-sm" onclick="ovAddETN()">+ Add ETN</button>
+      <span style="font-size:0.72rem;color:var(--muted);margin-left:8px">
+        ${sheetETN ? 'Pulls Full / Half data from the ETN sheet automatically' : 'No sheet ETN for this model — key Full / Half from paperwork'}
+      </span>
+    </div>`;
+
   return `<div class="card">
     <div class="card-header">✎ Digit Override — ${o.model} · Order #${o.order} · ×${o.qty}</div>
     <div class="ov-bar">
@@ -1461,6 +1644,7 @@ function renderOverrideEditor(o) {
     </div>
     <div class="ov-head-labels"><span>Digit Item</span><span>Qty / Board</span><span>Color</span><span></span></div>
     ${rows || '<div style="padding:14px;font-size:0.78rem;color:var(--muted)">No rows — click “+ Add digit”.</div>'}
+    ${etnSection}
     <div style="padding:10px 12px;border-top:1px solid var(--border)">
       <div style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;margin-bottom:4px">NOTE (prints on the report)</div>
       <input type="text" class="ov-input" id="ovNote" placeholder="e.g. Per LINE SPEC: score digits AMBER, all other digits RED"
@@ -1490,6 +1674,14 @@ function renderOverrideView(o) {
       ${ov.note ? `<div class="alert alert-info" style="font-size:0.78rem;margin-bottom:10px">📝 ${ov.note}</div>` : ''}
       <table><thead><tr><th>Digit Type</th><th>Color</th><th>Total Needed</th></tr></thead>
       <tbody>${ov.digits.map(chip).join('')}</tbody></table>
+      ${Array.isArray(ov.etns) && ov.etns.length ? `
+        <div style="margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:0.62rem;letter-spacing:2px;color:var(--blue)">ETN PANELS</div>
+        <table style="margin-top:4px"><thead><tr><th>Panel Size</th><th>Full ETN</th><th>Half ETN</th></tr></thead>
+        <tbody>${ov.etns.map(e => `<tr>
+          <td class="mono" style="color:var(--blue)">${e.panel || '—'}${e.fromSheet ? '' : ' <span class="ov-manual-tag">MANUAL</span>'}</td>
+          <td class="mono">${e.full_size || '—'}${e.full_qty ? ' × ' + e.full_qty : ''}</td>
+          <td class="mono">${e.half_size || '—'}${e.half_qty ? ' × ' + e.half_qty : ''}</td>
+        </tr>`).join('')}</tbody></table>` : ''}
       <div style="display:flex;gap:6px;margin-top:12px">
         <button class="btn btn-secondary btn-sm" onclick="startOverride('${o.id}')">✎ Edit Override</button>
         <button class="btn btn-danger btn-sm" onclick="revertOverride('${o.id}')">↺ Revert to Spec</button>
@@ -1541,14 +1733,14 @@ function renderCustomPicker(o) {
     </div>`).join('');
 
   // ETN section — only shown when order has ETN = true
-  const etnSectionHtml = o.etn ? `
+  const etnSectionHtml = orderHasETN(o) ? `
     <div class="picker-group">
       <div class="picker-section-label" style="color:var(--blue)">ETN UPGRADE</div>
       <div style="padding:10px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
         <div>
           <div style="font-size:0.65rem;color:var(--muted);letter-spacing:1px;margin-bottom:4px">PANEL SIZE</div>
           <input type="text" class="picker-qty-input" id="etn_size_${safeKey}"
-            placeholder="e.g. 9X56" value="${savedEtn.size || o.etnSize || ''}"
+            placeholder="e.g. 9X56" value="${savedEtn.size || orderETNPanels(o)[0] || ''}"
             style="width:100%;text-align:left;text-transform:uppercase"
             oninput="onEtnChange('${key}')">
         </div>
@@ -1575,7 +1767,7 @@ function renderCustomPicker(o) {
     <div class="custom-picker-header">
       <div>
         <span class="custom-picker-title">${ind ? 'INDOOR' : 'OUTDOOR'} CUSTOM — Select Digits</span>
-        <span class="custom-picker-sub">Order #${o.order} · ${o.model} · ×${o.qty}${o.etn ? ' · <span style="color:var(--blue)">ETN</span>' : ''}</span>
+        <span class="custom-picker-sub">Order #${o.order} · ${o.model} · ×${o.qty}${orderHasETN(o) ? ' · <span style="color:var(--blue)">ETN</span>' : ''}</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         <button class="btn btn-danger btn-sm" onclick="clearCustomDigits('${key}')">Clear</button>
@@ -1651,7 +1843,7 @@ function saveCustomDigits(key) {
   const size    = (document.getElementById('etn_size_' + safeKey)?.value || '').toUpperCase().trim();
   const fullQty = parseInt(document.getElementById('etn_full_qty_' + safeKey)?.value) || 0;
   const halfQty = parseInt(document.getElementById('etn_half_qty_' + safeKey)?.value) || 0;
-  const etn = o.etn ? { size: size || existingEtn.size, full_qty: fullQty || existingEtn.full_qty, half_qty: halfQty || existingEtn.half_qty } : {};
+  const etn = orderHasETN(o) ? { size: size || existingEtn.size, full_qty: fullQty || existingEtn.full_qty, half_qty: halfQty || existingEtn.half_qty } : {};
   customData[key] = { digits, etn };
   const btn = document.querySelector(`#picker_${safeKey} .btn-primary`);
   if (btn) { btn.textContent = '✓ Saved!'; setTimeout(()=>btn.textContent='✓ Save',1500); }
@@ -1953,10 +2145,10 @@ function renderSummary() {
   const indoorCount  = view.filter(o =>  isIndoor(o.model)).reduce((s,o)=>s+o.qty,0);
   const amberCount   = view.filter(o => o.color==='AMBER').reduce((s,o)=>s+o.qty,0);
   const redCount     = view.filter(o => o.color==='RED').reduce((s,o)=>s+o.qty,0);
-  const etnCount     = view.filter(o => o.etn).reduce((s,o)=>s+o.qty,0);
+  const etnCount     = view.filter(o => orderHasETN(o)).reduce((s,o)=>s+o.qty,0);
   const mixedCount   = view.filter(o => isMixed(o)).reduce((s,o)=>s+o.qty,0);
   const customPending= view.filter(o => isCustom(o.model) && !customData[o.id] && !hasOverride(o)).length;
-  const etnNoSize    = view.filter(o => o.etn && !o.etnSize && !isCustom(o.model)).length;
+  const etnNoSize    = view.filter(o => orderETNNoPanel(o)).length;
   const mixedPending = view.filter(o => isMixed(o) && !hasOverride(o)).length;
   const overriddenCt = view.filter(o => hasOverride(o)).length;
 
@@ -1997,7 +2189,7 @@ function renderSummary() {
   // Store all rows globally so header clicks can re-sort without recomputing the report
   lineListingRows = view.map(o => ({
     id: o.id, date: o.date || '', order: o.order, qty: o.qty, model: o.model, color: o.color,
-    etn: o.etn, etnSize: o.etnSize,
+    etn: orderHasETN(o), etnSize: orderETNPanels(o).join(', '),
     indoor: isIndoor(o.model), custom: isCustom(o.model), override: hasOverride(o)
   }));
   const lineTable = renderLineListing();
@@ -2010,34 +2202,24 @@ function renderSummary() {
     if (!isIndoor(o.model) && !isCustom(o.model)) return '<span class="color-tag" style="background:rgba(224,92,42,0.12);color:var(--accent2)">NO COLOR</span>';
     return '<span class="color-tag indoor">INDOOR</span>';
   };
-  const etnOrders = view.filter(o => o.etn);
+  const etnOrders = view.filter(o => orderHasETN(o));
   let etnSection = '';
   if (etnOrders.length) {
+    // One row per ETN panel — an order can carry more than one.
     const etnRow = o => {
       const cust = isCustom(o.model);
-      const e  = cust ? {} : (getETN(o.model) || {});
-      const cd = cust ? (customData[o.id]?.etn || {}) : {};
-      const panelSize = cust
-        ? (cd.size || o.etnSize || '—')
-        : (o.etnSize || e.upgrade_size || '—');
-      // Count only — the panel size already has its own column, so repeating it
-      // here just adds noise. Blank/absent qty falls back to an em dash.
-      const fullEtn = cust
-        ? (cd.full_qty ? `${cd.full_qty}` : '—')
-        : (e.full_qty ? `${e.full_qty}` : '—');
-      const halfSize = cust ? '—' : (e.half_size && e.half_size !== '-' && e.half_size !== '' ? e.half_size : '—');
-      const half = cust
-        ? (cd.half_qty ? `${cd.half_qty}` : '—')
-        : (halfSize !== '—' && e.half_qty ? `${e.half_qty}` : '—');
-      return `<tr>
+      return effectiveETNs(o).map(e => {
+        const halfSize = e.half_size || '—';
+        return `<tr>
         <td class="mono">${o.order}</td>
         <td class="mono">×${o.qty}</td>
         <td><strong>${o.model}</strong>${cust ? ' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>' : ''}</td>
         <td>${colorTag(o)}</td>
-        <td class="mono">${panelSize}</td>
-        <td class="mono">${fullEtn}</td>
-        <td class="mono">${half}</td>
+        <td class="mono">${e.panel || '—'}${e.fromSheet ? '' : ' <span class="ov-manual-tag">MANUAL</span>'}</td>
+        <td class="mono">${e.full_qty ? e.full_qty : '—'}</td>
+        <td class="mono">${halfSize !== '—' && e.half_qty ? e.half_qty : '—'}</td>
       </tr>`;
+      }).join('');
     };
     etnSection = `<div class="section-label-lg">ETN Summary</div>
       <div class="tl-card"><table class="tl-table">
@@ -2128,7 +2310,7 @@ function renderSummary() {
       ${statCardHtml(amberCount, 'var(--amber)', 'Outdoor Amber', view.filter(o=>o.color==='AMBER' && !isIndoor(o.model)).map(o=>o.id))}
       ${statCardHtml(redCount, 'var(--red)', 'Outdoor Red', view.filter(o=>o.color==='RED' && !isIndoor(o.model)).map(o=>o.id))}
       ${statCardHtml(indoorCount, 'var(--blue)', 'Indoor', view.filter(o=>isIndoor(o.model)).map(o=>o.id))}
-      ${statCardHtml(etnCount, '#3b82f6', 'ETN Boards', view.filter(o=>o.etn).map(o=>o.id))}
+      ${statCardHtml(etnCount, '#3b82f6', 'ETN Boards', view.filter(o=>orderHasETN(o)).map(o=>o.id))}
       ${mixedCount>0 ? statCardHtml(mixedCount, 'var(--accent2)', 'Mixed Color', view.filter(o=>isMixed(o)).map(o=>o.id)) : ''}
     </div>
     <div class="section-label-lg">Digit Totals</div>
