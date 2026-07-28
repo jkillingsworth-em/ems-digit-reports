@@ -1392,8 +1392,8 @@ function renderOrderDetail(i) {
 
   const etnHtml = etnList.map(e => `<div class="etn-box"><h4>ETN Upgrade${e.fromSheet ? '' : ' <span class="ov-manual-tag">MANUAL</span>'}</h4><div class="etn-grid">
     <div class="etn-stat"><div class="label">Panel Size</div><div class="value">${e.panel || '—'}</div></div>
-    <div class="etn-stat"><div class="label">Full ETN</div><div class="value">${e.full_size || '—'}${e.full_qty ? ' × ' + e.full_qty : ''}</div></div>
-    ${e.half_size ? `<div class="etn-stat"><div class="label">Half ETN</div><div class="value">${e.half_size}${e.half_qty ? ' × ' + e.half_qty : ''}</div></div>` : '<div></div>'}
+    <div class="etn-stat"><div class="label">Full ETN</div><div class="value">${e.full_qty ? e.full_qty : '—'}</div></div>
+    <div class="etn-stat"><div class="label">Half ETN</div><div class="value">${e.half_qty ? e.half_qty : '—'}</div></div>
   </div></div>`).join('');
 
   // Prev/Next: step through filtered navContext if active, else full pool.
@@ -1706,8 +1706,8 @@ function renderOverrideView(o) {
         <table style="margin-top:4px"><thead><tr><th>Panel Size</th><th>Full ETN</th><th>Half ETN</th></tr></thead>
         <tbody>${ov.etns.map(e => `<tr>
           <td class="mono" style="color:var(--blue)">${e.panel || '—'}${e.fromSheet ? '' : ' <span class="ov-manual-tag">MANUAL</span>'}</td>
-          <td class="mono">${e.full_size || '—'}${e.full_qty ? ' × ' + e.full_qty : ''}</td>
-          <td class="mono">${e.half_size || '—'}${e.half_qty ? ' × ' + e.half_qty : ''}</td>
+          <td class="mono">${e.full_qty ? e.full_qty : '—'}</td>
+          <td class="mono">${e.half_qty ? e.half_qty : '—'}</td>
         </tr>`).join('')}</tbody></table>` : ''}
       <div style="display:flex;gap:6px;margin-top:12px">
         <button class="btn btn-secondary btn-sm" onclick="startOverride('${o.id}')">✎ Edit Override</button>
@@ -2236,7 +2236,6 @@ function renderSummary() {
     const etnRow = o => {
       const cust = isCustom(o.model);
       return effectiveETNs(o).map(e => {
-        const halfSize = e.half_size || '—';
         return `<tr>
         <td class="mono">${o.order}</td>
         <td class="mono">×${o.qty}</td>
@@ -2244,7 +2243,7 @@ function renderSummary() {
         <td>${colorTag(o)}</td>
         <td class="mono">${e.panel || '—'}${e.fromSheet ? '' : ' <span class="ov-manual-tag">MANUAL</span>'}</td>
         <td class="mono">${e.full_qty ? e.full_qty : '—'}</td>
-        <td class="mono">${halfSize !== '—' && e.half_qty ? e.half_qty : '—'}</td>
+        <td class="mono">${e.half_qty ? e.half_qty : '—'}</td>
       </tr>`;
       }).join('');
     };
