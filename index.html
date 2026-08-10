@@ -319,7 +319,21 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 .color-tag.mixed { background: linear-gradient(90deg, rgba(231,76,60,0.18), rgba(245,158,11,0.18)); color: var(--accent2); }
 .color-tag.override { background: rgba(139,92,246,0.16); color: #8b5cf6; }
 .tl-card { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; overflow: hidden; margin-bottom: 12px; }
-.etn-roll-total td { border-top: 2px solid var(--border); background: rgba(255,255,255,0.03); }
+.etn-roll-total td { border-top: 2px solid var(--border); background: rgba(255,255,255,0.03); font-weight: 700; }
+.etn-col-table thead th { font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; letter-spacing: 1px;
+  color: var(--muted); text-transform: uppercase; text-align: left; padding: 5px 13px 4px;
+  border-bottom: 1px solid var(--border); font-weight: 600; }
+.etn-col-table thead th:nth-child(2), .etn-col-table thead th:nth-child(3) { text-align: right; }
+.etn-col-table tr { cursor: default; }
+.etn-col-table td.etn-size { font-family: 'IBM Plex Mono', monospace; font-size: 0.82rem; }
+.etn-col-table td:nth-child(2), .etn-col-table td:nth-child(3) { text-align: right;
+  font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 0.92rem; width: 42px; }
+.etn-col-table td.amber-qty { color: var(--amber); }
+.etn-col-table td.red-qty { color: var(--red); }
+.etn-col-table td.indoor-qty { color: var(--blue); }
+.etn-col-table td.mixed-qty { color: var(--accent2); }
+.dg-col-header.mixed-hdr { color: var(--accent2); }
+.dg-col-header.nocolor-hdr { color: var(--accent2); }
 
 /* ── Digit override editor (per-order) ── */
 .ov-row {
@@ -2268,50 +2282,56 @@ function renderSummary() {
       if (o.color === 'MIXED') return 'MIXED';
       return isCustom(o.model) ? 'INDOOR' : 'NO COLOR';
     };
-    const colorRank = { AMBER:0, RED:1, MIXED:2, 'NO COLOR':3, INDOOR:4 };
     const rollup = {};
     etnOrders.forEach(o => {
       const ck = colorKey(o);
       effectiveETNs(o).forEach(e => {
-        const panel = (e.panel || '').trim().toUpperCase() || '—';
-        const k = panel + '|' + ck;
-        if (!rollup[k]) rollup[k] = { panel, color: ck, full: 0, half: 0, boards: 0 };
-        rollup[k].full   += etnQtyTotal(e.full_qty, o.qty) || 0;
-        rollup[k].half   += etnQtyTotal(e.half_qty, o.qty) || 0;
-        rollup[k].boards += o.qty;
+        const panel = (e.panel || '').trim().toUpperCase() || '\u2014';
+        if (!rollup[ck]) rollup[ck] = {};
+        if (!rollup[ck][panel]) rollup[ck][panel] = { full: 0, half: 0, boards: 0 };
+        rollup[ck][panel].full   += etnQtyTotal(e.full_qty, o.qty) || 0;
+        rollup[ck][panel].half   += etnQtyTotal(e.half_qty, o.qty) || 0;
+        rollup[ck][panel].boards += o.qty;
       });
     });
-    const rollRows = Object.values(rollup).sort((a,b) =>
-      (a.panel === '\u2014') - (b.panel === '\u2014') ||
-      a.panel.localeCompare(b.panel) ||
-      (colorRank[a.color] - colorRank[b.color])
-    );
-    const rollTotalFull   = rollRows.reduce((s,r)=>s+r.full,0);
-    const rollTotalHalf   = rollRows.reduce((s,r)=>s+r.half,0);
-    const rollTotalBoards = rollRows.reduce((s,r)=>s+r.boards,0);
-    const rollTag = c =>
-      c === 'AMBER'  ? '<span class="color-tag amber">AMBER</span>' :
-      c === 'RED'    ? '<span class="color-tag red">RED</span>' :
-      c === 'MIXED'  ? '<span class="color-tag mixed">MIXED</span>' :
-      c === 'INDOOR' ? '<span class="color-tag indoor">INDOOR</span>' :
-      '<span class="color-tag" style="background:rgba(224,92,42,0.12);color:var(--accent2)">NO COLOR</span>';
+
+    // One column per digit color, same shape and order as Digit Totals.
+    // AMBER / RED / INDOOR always render (empty reads 'None this week').
+    // MIXED and NO COLOR only appear when a board actually needs attention,
+    // so they can't be missed but don't clutter a normal week.
+    const etnCol = (title, cls, qtyClass, key) => {
+      const m = rollup[key] || {};
+      const sizes = Object.keys(m).sort((a,b) =>
+        (a === '\u2014') - (b === '\u2014') || a.localeCompare(b));
+      if (!sizes.length) return `<div class="dg-col-panel"><div class="dg-col-header ${cls}">${title}</div>
+        <div style="padding:14px;font-size:0.78rem;color:var(--muted)">None this week</div></div>`;
+      const tF = sizes.reduce((s2,k)=>s2+m[k].full,0);
+      const tH = sizes.reduce((s2,k)=>s2+m[k].half,0);
+      const rows = sizes.map(k => `<tr>
+        <td class="etn-size">${k}</td>
+        <td class="${qtyClass}">${m[k].full || '\u2014'}</td>
+        <td class="${qtyClass}">${m[k].half || '\u2014'}</td>
+      </tr>`).join('');
+      return `<div class="dg-col-panel"><div class="dg-col-header ${cls}">${title}</div>
+        <table class="dg-table etn-col-table">
+        <thead><tr><th>Panel</th><th>Full</th><th>Half</th></tr></thead>
+        <tbody>${rows}
+        <tr class="etn-roll-total"><td class="etn-size">TOTAL</td>
+          <td class="${qtyClass}">${tF || '\u2014'}</td>
+          <td class="${qtyClass}">${tH || '\u2014'}</td></tr>
+        </tbody></table></div>`;
+    };
+
+    const extraCols =
+      (rollup['MIXED']    ? etnCol('MIXED','mixed-hdr','mixed-qty','MIXED') : '') +
+      (rollup['NO COLOR'] ? etnCol('NO COLOR','nocolor-hdr','mixed-qty','NO COLOR') : '');
     const etnTotalsTable = `<div class="section-label-lg">ETN Panel Totals</div>
-      <div class="tl-card"><table class="tl-table">
-      <thead><tr><th>Panel Size</th><th>Color</th><th>Boards</th><th>Full ETN</th><th>Half ETN</th></tr></thead>
-      <tbody>${rollRows.map(r => `<tr>
-        <td class="mono"><strong>${r.panel}</strong></td>
-        <td>${rollTag(r.color)}</td>
-        <td class="mono">${r.boards}</td>
-        <td class="mono">${r.full || '\u2014'}</td>
-        <td class="mono">${r.half || '\u2014'}</td>
-      </tr>`).join('')}
-      <tr class="etn-roll-total">
-        <td class="mono"><strong>TOTAL</strong></td>
-        <td></td>
-        <td class="mono"><strong>${rollTotalBoards}</strong></td>
-        <td class="mono"><strong>${rollTotalFull || '\u2014'}</strong></td>
-        <td class="mono"><strong>${rollTotalHalf || '\u2014'}</strong></td>
-      </tr></tbody></table></div>`;
+      <div class="dg-columns">
+        ${etnCol('AMBER','amber','amber-qty','AMBER')}
+        ${etnCol('RED','red','red-qty','RED')}
+        ${etnCol('INDOOR','indoor','indoor-qty','INDOOR')}
+        ${extraCols}
+      </div>`;
 
     etnSection = etnTotalsTable + `<div class="section-label-lg">ETN Summary</div>
       <div class="tl-card"><table class="tl-table">
