@@ -319,6 +319,21 @@ tr:hover td { background: rgba(255,255,255,0.018); }
 .color-tag.mixed { background: linear-gradient(90deg, rgba(231,76,60,0.18), rgba(245,158,11,0.18)); color: var(--accent2); }
 .color-tag.override { background: rgba(139,92,246,0.16); color: #8b5cf6; }
 .tl-card { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; overflow: hidden; margin-bottom: 12px; }
+.etn-roll-total td { border-top: 2px solid var(--border); background: rgba(255,255,255,0.03); font-weight: 700; }
+.etn-col-table thead th { font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; letter-spacing: 1px;
+  color: var(--muted); text-transform: uppercase; text-align: left; padding: 5px 13px 4px;
+  border-bottom: 1px solid var(--border); font-weight: 600; }
+.etn-col-table thead th:nth-child(2), .etn-col-table thead th:nth-child(3) { text-align: right; }
+.etn-col-table tr { cursor: default; }
+.etn-col-table td.etn-size { font-family: 'IBM Plex Mono', monospace; font-size: 0.82rem; }
+.etn-col-table td:nth-child(2), .etn-col-table td:nth-child(3) { text-align: right;
+  font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 0.92rem; width: 42px; }
+.etn-col-table td.amber-qty { color: var(--amber); }
+.etn-col-table td.red-qty { color: var(--red); }
+.etn-col-table td.indoor-qty { color: var(--blue); }
+.etn-col-table td.mixed-qty { color: var(--accent2); }
+.dg-col-header.mixed-hdr { color: var(--accent2); }
+.dg-col-header.nocolor-hdr { color: var(--accent2); }
 
 /* ── Digit override editor (per-order) ── */
 .ov-row {
@@ -964,6 +979,15 @@ function orderETNPanels(o) { return effectiveETNs(o).map(e => (e.panel || '').tr
 function orderETNNoPanel(o){ return effectiveETNs(o).some(e => !(e.panel || '').trim()); }
 // True when an ETN row had to be keyed by hand because the model has no ETN row.
 function orderETNManual(o) { return effectiveETNs(o).some(e => !e.fromSheet); }
+// Panel counts on an ETN row are PER BOARD — that is how the Google Sheet
+// stores them and how they are keyed into the override editor. Anything that
+// reports what to BUILD must scale by the order quantity, exactly like digit
+// counts do (Math.round(d.qty * o.qty)). Returns null when there is no count.
+function etnQtyTotal(v, qty) {
+  const n = parseFloat(v);
+  if (!n) return null;
+  return Math.round(n * (qty || 1));
+}
 
 function isHandmade(model) { return hmOutdoor.has(model) || hmIndoor.has(model); }
 function hasHandmadeDigits(model) {
@@ -1392,8 +1416,8 @@ function renderOrderDetail(i) {
 
   const etnHtml = etnList.map(e => `<div class="etn-box"><h4>ETN Upgrade${e.fromSheet ? '' : ' <span class="ov-manual-tag">MANUAL</span>'}</h4><div class="etn-grid">
     <div class="etn-stat"><div class="label">Panel Size</div><div class="value">${e.panel || '—'}</div></div>
-    <div class="etn-stat"><div class="label">Full ETN</div><div class="value">${e.full_size || '—'}${e.full_qty ? ' × ' + e.full_qty : ''}</div></div>
-    ${e.half_size ? `<div class="etn-stat"><div class="label">Half ETN</div><div class="value">${e.half_size}${e.half_qty ? ' × ' + e.half_qty : ''}</div></div>` : '<div></div>'}
+    <div class="etn-stat"><div class="label">Full ETN</div><div class="value">${etnQtyTotal(e.full_qty, o.qty) ?? '—'}</div></div>
+    <div class="etn-stat"><div class="label">Half ETN</div><div class="value">${etnQtyTotal(e.half_qty, o.qty) ?? '—'}</div></div>
   </div></div>`).join('');
 
   // Prev/Next: step through filtered navContext if active, else full pool.
@@ -1706,8 +1730,8 @@ function renderOverrideView(o) {
         <table style="margin-top:4px"><thead><tr><th>Panel Size</th><th>Full ETN</th><th>Half ETN</th></tr></thead>
         <tbody>${ov.etns.map(e => `<tr>
           <td class="mono" style="color:var(--blue)">${e.panel || '—'}${e.fromSheet ? '' : ' <span class="ov-manual-tag">MANUAL</span>'}</td>
-          <td class="mono">${e.full_qty ? e.full_qty : '—'}</td>
-          <td class="mono">${e.half_qty ? e.half_qty : '—'}</td>
+          <td class="mono">${etnQtyTotal(e.full_qty, o.qty) ?? '—'}</td>
+          <td class="mono">${etnQtyTotal(e.half_qty, o.qty) ?? '—'}</td>
         </tr>`).join('')}</tbody></table>` : ''}
       <div style="display:flex;gap:6px;margin-top:12px">
         <button class="btn btn-secondary btn-sm" onclick="startOverride('${o.id}')">✎ Edit Override</button>
@@ -2242,12 +2266,74 @@ function renderSummary() {
         <td><strong>${o.model}</strong>${cust ? ' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>' : ''}</td>
         <td>${colorTag(o)}</td>
         <td class="mono">${e.panel || '—'}${e.fromSheet ? '' : ' <span class="ov-manual-tag">MANUAL</span>'}</td>
-        <td class="mono">${e.full_qty ? e.full_qty : '—'}</td>
-        <td class="mono">${e.half_qty ? e.half_qty : '—'}</td>
+        <td class="mono">${etnQtyTotal(e.full_qty, o.qty) ?? '—'}</td>
+        <td class="mono">${etnQtyTotal(e.half_qty, o.qty) ?? '—'}</td>
       </tr>`;
       }).join('');
     };
-    etnSection = `<div class="section-label-lg">ETN Summary</div>
+    // ── Roll-up: how many panels to build, grouped by panel size + color.
+    //    Same qty scaling as the listing below (per-board count x order qty).
+    //    Color buckets mirror the listing's tags so nothing is silently merged:
+    //    an unresolved MIXED or NO COLOR board keeps its own row.
+    const colorKey = o => {
+      if (isIndoor(o.model)) return 'INDOOR';
+      if (o.color === 'AMBER') return 'AMBER';
+      if (o.color === 'RED')   return 'RED';
+      if (o.color === 'MIXED') return 'MIXED';
+      return isCustom(o.model) ? 'INDOOR' : 'NO COLOR';
+    };
+    const rollup = {};
+    etnOrders.forEach(o => {
+      const ck = colorKey(o);
+      effectiveETNs(o).forEach(e => {
+        const panel = (e.panel || '').trim().toUpperCase() || '\u2014';
+        if (!rollup[ck]) rollup[ck] = {};
+        if (!rollup[ck][panel]) rollup[ck][panel] = { full: 0, half: 0, boards: 0 };
+        rollup[ck][panel].full   += etnQtyTotal(e.full_qty, o.qty) || 0;
+        rollup[ck][panel].half   += etnQtyTotal(e.half_qty, o.qty) || 0;
+        rollup[ck][panel].boards += o.qty;
+      });
+    });
+
+    // One column per digit color, same shape and order as Digit Totals.
+    // AMBER / RED / INDOOR always render (empty reads 'None this week').
+    // MIXED and NO COLOR only appear when a board actually needs attention,
+    // so they can't be missed but don't clutter a normal week.
+    const etnCol = (title, cls, qtyClass, key) => {
+      const m = rollup[key] || {};
+      const sizes = Object.keys(m).sort((a,b) =>
+        (a === '\u2014') - (b === '\u2014') || a.localeCompare(b));
+      if (!sizes.length) return `<div class="dg-col-panel"><div class="dg-col-header ${cls}">${title}</div>
+        <div style="padding:14px;font-size:0.78rem;color:var(--muted)">None this week</div></div>`;
+      const tF = sizes.reduce((s2,k)=>s2+m[k].full,0);
+      const tH = sizes.reduce((s2,k)=>s2+m[k].half,0);
+      const rows = sizes.map(k => `<tr>
+        <td class="etn-size">${k}</td>
+        <td class="${qtyClass}">${m[k].full || '\u2014'}</td>
+        <td class="${qtyClass}">${m[k].half || '\u2014'}</td>
+      </tr>`).join('');
+      return `<div class="dg-col-panel"><div class="dg-col-header ${cls}">${title}</div>
+        <table class="dg-table etn-col-table">
+        <thead><tr><th>Panel</th><th>Full</th><th>Half</th></tr></thead>
+        <tbody>${rows}
+        <tr class="etn-roll-total"><td class="etn-size">TOTAL</td>
+          <td class="${qtyClass}">${tF || '\u2014'}</td>
+          <td class="${qtyClass}">${tH || '\u2014'}</td></tr>
+        </tbody></table></div>`;
+    };
+
+    const extraCols =
+      (rollup['MIXED']    ? etnCol('MIXED','mixed-hdr','mixed-qty','MIXED') : '') +
+      (rollup['NO COLOR'] ? etnCol('NO COLOR','nocolor-hdr','mixed-qty','NO COLOR') : '');
+    const etnTotalsTable = `<div class="section-label-lg">ETN Panel Totals</div>
+      <div class="dg-columns">
+        ${etnCol('AMBER','amber','amber-qty','AMBER')}
+        ${etnCol('RED','red','red-qty','RED')}
+        ${etnCol('INDOOR','indoor','indoor-qty','INDOOR')}
+        ${extraCols}
+      </div>`;
+
+    etnSection = etnTotalsTable + `<div class="section-label-lg">ETN Summary</div>
       <div class="tl-card"><table class="tl-table">
       <thead><tr><th>Order</th><th>Qty</th><th>Model</th><th>Color</th><th>Panel Size</th><th>Full ETN</th><th>Half ETN</th></tr></thead>
       <tbody>${etnOrders.map(etnRow).join('')}</tbody></table></div>`;
