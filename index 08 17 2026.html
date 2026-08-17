@@ -280,6 +280,19 @@ tr:hover td { background: rgba(255,255,255,0.018); }
   .tl-table tr, .dg-col-panel { break-inside: avoid; }
   .section-block { break-inside: avoid; }
   .hm-order-card { break-inside: avoid; }
+  .run-bar, .recon-strip, .pending-box, .alert { display: none !important; }
+}
+
+/* Combined print report — Summary + Handmade in one document.
+   Only used while the Print button has swapped the content pane; the
+   on-screen Summary and Handmade views are untouched. */
+.print-break { display: block; height: 0; }
+@media print {
+  .print-break { break-before: page; page-break-before: always; }
+}
+.print-only-title {
+  font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 2px;
+  margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--border);
 }
 
 /* Order line-listing table */
@@ -557,7 +570,7 @@ tr:hover td { background: rgba(255,255,255,0.018); }
     <div class="parse-info" id="parseInfo"></div>
     <div class="sidebar-footer">
       <button class="btn btn-danger btn-sm" style="flex:1" onclick="clearAll()">Clear All</button>
-      <button class="btn btn-secondary btn-sm" style="flex:1" onclick="window.print()">🖨 Print</button>
+      <button class="btn btn-secondary btn-sm" style="flex:1" onclick="printReport()">🖨 Print</button>
     </div>
   </div>
   <div class="content" id="content">
@@ -1356,6 +1369,35 @@ function showView(view) {
   }
 }
 
+// ── PRINT ─────────────────────────────────────────────────────────────────────
+// From Summary or Handmade, print one combined document: totals page, then
+// outdoor line listing, indoor line listing, and handmade orders each on their
+// own page. The content pane is swapped for the print render and restored the
+// moment the print dialog closes, so nothing changes on screen.
+// From any other view (order detail), print behaves exactly as before.
+function printReport() {
+  if (currentView !== 'summary' && currentView !== 'handmade') { window.print(); return; }
+
+  const prevView = currentView;
+  const el = document.getElementById('content');
+  const scrollTop = el.scrollTop;
+  let restored = false;
+
+  const restore = () => {
+    if (restored) return;
+    restored = true;
+    window.removeEventListener('afterprint', restore);
+    showView(prevView);
+    el.scrollTop = scrollTop;
+  };
+
+  el.innerHTML = renderSummary('print') + renderHandmade('print');
+  window.addEventListener('afterprint', restore);
+  window.print();
+  // Fallback for browsers that don't fire afterprint reliably.
+  setTimeout(restore, 1500);
+}
+
 function selectOrder(i, keepContext) {
   currentOrderIdx = i;
   currentView = 'order';
@@ -2021,6 +2063,31 @@ function renderLineListing() {
     </thead><tbody>${body}</tbody></table></div>`;
 }
 
+// Static line listing for the print report, one color group at a time.
+// Deliberately not the sortable/expandable screen table: no duplicate element
+// IDs, no chevrons or sort arrows, and always grouped Outdoor/Indoor by order #
+// regardless of how the on-screen listing happens to be sorted.
+function renderPrintLineListing(kind) {
+  const rows = lineListingRows
+    .filter(r => (r.indoor ? 'indoor' : 'outdoor') === kind)
+    .sort((a,b) => a.order.localeCompare(b.order));
+  if (!rows.length) return '';
+  const body = rows.map(o => {
+    const hm = lineModelIsHandmade(o);
+    return `<tr>
+      <td class="mono" style="color:var(--muted);font-size:0.75rem">${o.date || '—'}</td>
+      <td class="mono">${o.order}</td>
+      <td class="mono">×${o.qty}</td>
+      <td><strong${hm ? ' style="color:var(--green)"' : ''}>${o.model}</strong>${o.custom?' <span class="color-tag" style="background:rgba(224,92,42,0.15);color:var(--accent2)">CUSTOM</span>':''}${o.override?' <span class="color-tag override">OVERRIDE</span>':''}</td>
+      <td>${lineColorTag(o)}</td>
+      <td class="mono">${o.etn ? (o.etnSize || 'ETN') : '—'}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="tl-card"><table class="tl-table">
+    <thead><tr><th>Date</th><th>Order</th><th>Qty</th><th>Model</th><th>Color</th><th>ETN Size</th></tr></thead>
+    <tbody>${body}</tbody></table></div>`;
+}
+
 // Section divider row ("Outdoor" / "Indoor") with its own expand/collapse-all toggle.
 // sectionKey scopes the toggle to just the rows in that section.
 function sectionHeaderHtml(label, sectionKey) {
@@ -2189,7 +2256,10 @@ function buildDigitDetailHtml(standardItems, handmadeItems, orderQty, getName, g
   return `<div class="tl-detail-panel">${standardHtml}${handmadeHtml}</div>`;
 }
 
-function renderSummary() {
+// mode === 'print' returns the print-ordered HTML instead of writing to #content.
+// Print order: totals page (stat cards, digit totals, ETN) -> page break ->
+// outdoor line listing -> page break -> indoor line listing.
+function renderSummary(mode) {
   const view = activeOrders();
   const { amber, red, indoor } = computeTotals();
   const outdoorCount = view.filter(o => !isIndoor(o.model)).reduce((s,o)=>s+o.qty,0);
@@ -2409,6 +2479,35 @@ function renderSummary() {
       <tbody>${rowsH}</tbody></table></div>`;
   }
 
+  const statGrid = `<div class="summary-grid">
+      ${statCardHtml(outdoorCount+indoorCount, '', totalsView==='pool'?'Pool Boards':'Boards This Run', view.map(o=>o.id))}
+      ${statCardHtml(amberCount, 'var(--amber)', 'Outdoor Amber', view.filter(o=>o.color==='AMBER' && !isIndoor(o.model)).map(o=>o.id))}
+      ${statCardHtml(redCount, 'var(--red)', 'Outdoor Red', view.filter(o=>o.color==='RED' && !isIndoor(o.model)).map(o=>o.id))}
+      ${statCardHtml(indoorCount, 'var(--blue)', 'Indoor', view.filter(o=>isIndoor(o.model)).map(o=>o.id))}
+      ${statCardHtml(etnCount, '#3b82f6', 'ETN Boards', view.filter(o=>orderHasETN(o)).map(o=>o.id))}
+      ${mixedCount>0 ? statCardHtml(mixedCount, 'var(--accent2)', 'Mixed Color', view.filter(o=>isMixed(o)).map(o=>o.id)) : ''}
+    </div>`;
+
+  const digitTotals = `<div class="section-label-lg">Digit Totals</div>
+    <div class="dg-columns">
+      ${makeCol('AMBER','amber',amber,'amber-qty')}
+      ${makeCol('RED','red',red,'red-qty')}
+      ${makeCol('INDOOR','indoor',indoor,'indoor-qty')}
+    </div>`;
+
+  if (mode === 'print') {
+    const outTable = renderPrintLineListing('outdoor');
+    const indTable = renderPrintLineListing('indoor');
+    return `
+    <div class="view-header"><div><div class="view-title">EMS Digit Report</div>${weekLabel ? `<div class="view-sub">${weekLabel}</div>` : ''}</div></div>
+    ${statGrid}
+    ${digitTotals}
+    ${etnSection}
+    ${outTable ? `<div class="print-break"></div><div class="print-only-title">Order Line Listing — Outdoor</div>${outTable}` : ''}
+    ${indTable ? `<div class="print-break"></div><div class="print-only-title">Order Line Listing — Indoor</div>${indTable}` : ''}
+    ${heldBox}`;
+  }
+
   document.getElementById('content').innerHTML = `
     <div class="view-header"><div><div class="view-title">EMS Digit Report</div>${weekLabel ? `<div class="view-sub">${weekLabel}</div>` : ''}</div></div>
     ${runControls}
@@ -2417,20 +2516,8 @@ function renderSummary() {
     ${mixedPending>0 ? `<div class="alert alert-warn">⚠ ${mixedPending} MIXED-color board(s) have no digit override entered yet — their digits are NOT in these totals.</div>` : ''}
     ${etnNoSize>0 ? `<div class="alert alert-warn">⚠ ${etnNoSize} ETN order(s) flagged but missing a panel size — verify from paperwork.</div>` : ''}
     ${overriddenCt>0 ? `<div class="alert alert-info">✎ ${overriddenCt} order(s) use overridden digits (not the model spec from the Google Sheet). Marked OVERRIDE in the line listing.</div>` : ''}
-    <div class="summary-grid">
-      ${statCardHtml(outdoorCount+indoorCount, '', totalsView==='pool'?'Pool Boards':'Boards This Run', view.map(o=>o.id))}
-      ${statCardHtml(amberCount, 'var(--amber)', 'Outdoor Amber', view.filter(o=>o.color==='AMBER' && !isIndoor(o.model)).map(o=>o.id))}
-      ${statCardHtml(redCount, 'var(--red)', 'Outdoor Red', view.filter(o=>o.color==='RED' && !isIndoor(o.model)).map(o=>o.id))}
-      ${statCardHtml(indoorCount, 'var(--blue)', 'Indoor', view.filter(o=>isIndoor(o.model)).map(o=>o.id))}
-      ${statCardHtml(etnCount, '#3b82f6', 'ETN Boards', view.filter(o=>orderHasETN(o)).map(o=>o.id))}
-      ${mixedCount>0 ? statCardHtml(mixedCount, 'var(--accent2)', 'Mixed Color', view.filter(o=>isMixed(o)).map(o=>o.id)) : ''}
-    </div>
-    <div class="section-label-lg">Digit Totals</div>
-    <div class="dg-columns">
-      ${makeCol('AMBER','amber',amber,'amber-qty')}
-      ${makeCol('RED','red',red,'red-qty')}
-      ${makeCol('INDOOR','indoor',indoor,'indoor-qty')}
-    </div>
+    ${statGrid}
+    ${digitTotals}
     ${etnSection}
     <div class="section-label-lg">Order Line Listing</div>
     ${lineTable}
@@ -2438,7 +2525,10 @@ function renderSummary() {
 }
 
 // ── HANDMADE ─────────────────────────────────────────────────────────────────
-function renderHandmade() {
+// mode === 'print' returns just the "Orders with Handmade Digits" section on its
+// own page instead of writing to #content. The in-house aggregate totals are
+// omitted from print — those digits are already inside the main Digit Totals.
+function renderHandmade(mode) {
   const view = activeOrders();
   const hmOrders = view.filter(o => {
     if (isCustom(o.model)) return false;
@@ -2446,6 +2536,7 @@ function renderHandmade() {
   });
 
   if (!hmOrders.length) {
+    if (mode === 'print') return '';
     document.getElementById('content').innerHTML = `<div class="view-header"><div><div class="view-title">EMS Digit Report — Handmade</div></div></div>
       <div class="alert alert-info">No handmade digit boards on this week's truck list.</div>`;
     return;
@@ -2562,6 +2653,13 @@ function renderHandmade() {
   }).join('');
 
   const weekLabel = getWeekLabel();
+
+  if (mode === 'print') {
+    return `<div class="print-break"></div>
+      <div class="print-only-title">Orders with Handmade Digits</div>
+      ${orderCards}`;
+  }
+
   document.getElementById('content').innerHTML = `
     <div class="view-header"><div><div class="view-title">EMS Digit Report — Handmade</div>${weekLabel ? `<div class="view-sub">${weekLabel}</div>` : ''}</div></div>
     <div class="section-label-lg">Handmade (In-House) Digit Totals</div>
