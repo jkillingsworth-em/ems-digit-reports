@@ -444,6 +444,24 @@ tr:hover td { background: rgba(255,255,255,0.018); }
   padding: 2px 9px; border-radius: 10px;
 }
 .flags-count.has-issues { background: rgba(224,92,42,0.18); color: var(--accent2); }
+.archive-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px 8px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.arc-item { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 0.76rem; }
+.arc-top  { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.arc-label{ font-weight: 700; letter-spacing: 0.02em; }
+.arc-kind { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; opacity: 0.65; }
+.arc-msg  { margin-top: 4px; font-size: 0.7rem; color: var(--muted); }
+.arc-msg.ok   { color: #22c55e; }
+.arc-msg.err  { color: #ef4444; }
+.arc-msg.busy { color: var(--accent2); }
+.arc-btn {
+  border: 1px solid var(--border); background: transparent; color: var(--text);
+  border-radius: 5px; padding: 3px 9px; font-size: 0.68rem; font-weight: 700; cursor: pointer;
+}
+.arc-btn:hover:not(:disabled) { border-color: var(--accent2); color: var(--accent2); }
+.arc-btn:disabled { opacity: 0.4; cursor: default; }
 .flags-count.all-clear { background: rgba(46,204,113,0.15); color: var(--green); }
 .flags-empty { padding: 22px 16px; color: var(--muted); font-size: 0.8rem; text-align: center; line-height: 1.6; }
 .flag-clear-banner {
@@ -568,6 +586,13 @@ tr:hover td { background: rgba(255,255,255,0.018); }
       <div class="flags-empty">Paste order data above to run checks.</div>
     </div>
     <div class="parse-info" id="parseInfo"></div>
+    <div class="archive-header">
+      <span class="sidebar-label" style="margin:0">Archive</span>
+      <span class="flags-count" id="archiveCount"></span>
+    </div>
+    <div class="order-list" id="archivePanel" style="max-height:180px">
+      <div class="flags-empty">Nothing to archive yet.</div>
+    </div>
     <div class="sidebar-footer">
       <button class="btn btn-danger btn-sm" style="flex:1" onclick="clearAll()">Clear All</button>
       <button class="btn btn-secondary btn-sm" style="flex:1" onclick="printReport()">🖨 Print</button>
@@ -853,6 +878,7 @@ const Persist = {
     try {
       const snapshot = {
         orders, customData, overrides, runActive, runLabel, pendingRush, totalsView,
+        archiveState,
         dates: {
           d1: (document.getElementById('date1')||{}).value || '',
           d2: (document.getElementById('date2')||{}).value || '',
@@ -875,6 +901,7 @@ const Persist = {
       runLabel    = s.runLabel || '';
       pendingRush = s.pendingRush || [];
       totalsView  = s.totalsView || 'run';
+      archiveState = s.archiveState || {};   // absent in pre-archive saves
       if (s.dates) {
         const d1=document.getElementById('date1'), d2=document.getElementById('date2'), dn=document.getElementById('dateNote');
         if (d1) d1.value = s.dates.d1||''; if (d2) d2.value = s.dates.d2||''; if (dn) dn.value = s.dates.note||'';
@@ -1000,6 +1027,207 @@ function etnQtyTotal(v, qty) {
   const n = parseFloat(v);
   if (!n) return null;
   return Math.round(n * (qty || 1));
+}
+
+// ── ARCHIVE ──────────────────────────────────────────────────────────────────
+// The pool is working state and gets wiped by Clear All. The archive is the
+// permanent record of what was actually BUILT, written to a Google Sheet via an
+// Apps Script Web App. It is what cross-period reporting reads from later
+// (handmade digit totals by date range, model/color comparisons, SAGE 100
+// correlation). ORDER is kept as a clean atomic field on purpose — it is the
+// join key to SAGE.
+const ARCHIVE_URL   = 'https://script.google.com/macros/s/AKfycbzQ9Vxbfhw4YKP9LZln9Sd_HxbCaMBKBGdzYGz2asRKSw5N1hejx0aiY2j97iSPw6At1g/exec';
+const ARCHIVE_TOKEN = '6945e9f49wef4v9wv49wrbv74w6ervg2';
+
+let archiveState = {};   // dateLabel -> {status:'idle'|'busy'|'ok'|'err', msg, at}
+let builtQty     = null; // {"ORDER|MODEL": qty} from the archive, or null if not loaded
+
+// Order-level colour bucket. Mirrors the ETN roll-up's colorKey exactly so the
+// archive never invents a second convention that drifts from the on-screen one.
+function archiveColorKey(o) {
+  if (isIndoor(o.model)) return 'INDOOR';
+  if (o.color === 'AMBER') return 'AMBER';
+  if (o.color === 'RED')   return 'RED';
+  if (o.color === 'MIXED') return 'MIXED';
+  return isCustom(o.model) ? 'INDOOR' : 'NO COLOR';
+}
+
+// Work out what KIND of list a date label is, so the Apps Script knows whether
+// to replace (dated/named) or run the rolling ship-off comparison (running).
+//   "AUG 17" / "17 JULY 2026(B)"  -> DATED   (a "(B)" revision replaces the base)
+//   "CRATED B-2026" / "PICK-UP 3-2026" -> RUNNING
+//   "COLORWORX"                   -> NAMED   (one-off, standalone)
+function deriveListMeta(label) {
+  const key = String(label || '').trim();
+  if (/^(CRATED|PICK-UP|PICK UP)\s+[A-Z0-9]+-\d{4}$/i.test(key)) {
+    return { listKey: key.toUpperCase(), familyType: 'RUNNING' };
+  }
+  // A dated label carries a month name or a number+month; anything else that
+  // isn't a running family is treated as a one-off named list.
+  const dated = /\d/.test(key) &&
+    /(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)/i.test(key);
+  return { listKey: key, familyType: dated ? 'DATED' : 'NAMED' };
+}
+
+// Resolve one order into archive digit rows. This is the same resolution the
+// Handmade view and Digit Totals use — override wins over sheet, unresolved
+// MIXED and no-colour boards contribute nothing — so archived numbers always
+// match what was on screen.
+function archiveDigitRows(o) {
+  const ind     = isIndoor(o.model);
+  const cust    = isCustom(o.model);
+  const noColor = !ind && !cust && o.color !== 'RED' && o.color !== 'AMBER' && o.color !== 'MIXED';
+  const rowBase = {
+    ORDER: o.order, MODEL: o.model, COLOR: archiveColorKey(o), QTY: o.qty,
+    WAS_OVERRIDE: overrides[o.id] ? 'TRUE' : 'FALSE',
+    WAS_CUSTOM:   cust ? 'TRUE' : 'FALSE',
+  };
+
+  // Which digit names count as in-house for this model.
+  let hmNames;
+  if (cust) {
+    hmNames = new Set(ind ? DB.custom_indoor_handmade : DB.custom_outdoor_handmade);
+  } else {
+    hmNames = new Set((hmOutdoorDigits[o.model] || hmIndoorDigits[o.model] || []).map(d => d.digit));
+  }
+
+  const ovDigits = effectiveDigits(o);
+  if (ovDigits) {
+    if (noColor) return [];
+    return ovDigits.map(d => Object.assign({}, rowBase, {
+      DIGIT_NAME: d.item,
+      DIGIT_COLOR: ind ? '' : (d.color || ''),
+      DIGIT_QTY_PER_BOARD: d.qty,
+      DIGIT_TOTAL: Math.round(d.qty * o.qty),
+      IS_HANDMADE: hmNames.has(d.item) ? 'TRUE' : 'FALSE',
+    }));
+  }
+
+  if (isMixed(o)) return [];   // unresolved mixed — never guessed at
+  if (noColor)    return [];   // outdoor with no colour set — flagged, not archived
+
+  const lineColor = ind ? '' : (o.color === 'AMBER' ? 'AMBER' : 'RED');
+
+  if (cust) {
+    const cd = customData[o.id];
+    return (cd?.digits || []).filter(d => d.qty > 0).map(d => Object.assign({}, rowBase, {
+      DIGIT_NAME: d.desc,
+      DIGIT_COLOR: lineColor,
+      DIGIT_QTY_PER_BOARD: d.qty,
+      DIGIT_TOTAL: Math.round(d.qty * o.qty),
+      IS_HANDMADE: hmNames.has(d.desc) ? 'TRUE' : 'FALSE',
+    }));
+  }
+
+  return (getDigits(o.model) || []).map(d => Object.assign({}, rowBase, {
+    DIGIT_NAME: d.digit,
+    DIGIT_COLOR: lineColor,
+    DIGIT_QTY_PER_BOARD: d.qty,
+    DIGIT_TOTAL: Math.round(d.qty * o.qty),
+    IS_HANDMADE: hmNames.has(d.digit) ? 'TRUE' : 'FALSE',
+  }));
+}
+
+// ETN panels go to their own tab — different product line, and keeping panel
+// size in its own column is what makes "how many 9X56 panels shipped in Q3"
+// answerable with a pivot. Per-board and total both stored, same as digits.
+function archiveEtnRows(o) {
+  return effectiveETNs(o).map(e => ({
+    ORDER: o.order, MODEL: o.model, COLOR: archiveColorKey(o), ORDER_QTY: o.qty,
+    PANEL: (e.panel || '').trim(),
+    FULL_QTY_PER_BOARD: e.full_qty || '',
+    FULL_TOTAL: etnQtyTotal(e.full_qty, o.qty) ?? '',
+    HALF_QTY_PER_BOARD: e.half_qty || '',
+    HALF_TOTAL: etnQtyTotal(e.half_qty, o.qty) ?? '',
+    FROM_SHEET: e.fromSheet ? 'TRUE' : 'FALSE',
+  }));
+}
+
+// Orders eligible to archive for a label. The archive records what was BUILT,
+// so only in-run and changed orders qualify once a production run is active.
+// With no run loaded there is nothing to contradict the standard list, so the
+// whole label is taken.
+function archivableOrders(label) {
+  return orders.filter(o => {
+    if (o.date !== label) return false;
+    if (!runActive) return true;
+    return o.runStatus === 'in_run' || o.runStatus === 'changed';
+  });
+}
+
+function archiveLabels() {
+  return [...new Set(orders.map(o => o.date))].filter(Boolean);
+}
+
+async function archiveCall(payload) {
+  const res = await fetch(ARCHIVE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight
+    body: JSON.stringify(Object.assign({ token: ARCHIVE_TOKEN }, payload)),
+  });
+  return res.json();
+}
+
+// Refresh the built-quantity index. This is what lets a held order be sorted
+// into "already built on an earlier run" versus "still pending" — the tool
+// cannot tell those apart on its own.
+async function refreshBuiltQty() {
+  try {
+    const r = await archiveCall({ action: 'getBuiltQty' });
+    if (r && r.ok) { builtQty = r.built || {}; return true; }
+  } catch (e) { /* offline or endpoint down — leave builtQty as-is */ }
+  return false;
+}
+
+async function archiveLabel(label, opts) {
+  const meta = deriveListMeta(label);
+  const pool = archivableOrders(label);
+  if (!pool.length) {
+    archiveState[label] = { status: 'err', msg: 'nothing to archive', at: Date.now() };
+    renderFlagsPanel();
+    return;
+  }
+
+  const rows = [], etnRows = [];
+  pool.forEach(o => {
+    archiveDigitRows(o).forEach(r => rows.push(r));
+    archiveEtnRows(o).forEach(r => etnRows.push(r));
+  });
+
+  if (!rows.length) {
+    archiveState[label] = { status: 'err', msg: 'no resolved digits — check flags', at: Date.now() };
+    renderFlagsPanel();
+    return;
+  }
+
+  archiveState[label] = { status: 'busy', msg: 'archiving…', at: Date.now() };
+  renderFlagsPanel();
+
+  try {
+    const r = await archiveCall({
+      action: 'archiveList',
+      listKey: meta.listKey,
+      familyType: meta.familyType,
+      rows, etnRows,
+      skipDedup: !!(opts && opts.skipDedup),
+    });
+    if (r && r.ok) {
+      const skipped = (r.skippedAlreadyBuilt || []).length;
+      archiveState[label] = {
+        status: 'ok',
+        msg: `${r.rowsWritten} digit rows, ${r.etnWritten} ETN` +
+             (skipped ? ` · ${skipped} already built` : ''),
+        at: Date.now(), detail: r.skippedAlreadyBuilt || [],
+      };
+      await refreshBuiltQty();
+    } else {
+      archiveState[label] = { status: 'err', msg: (r && r.error) || 'archive failed', at: Date.now() };
+    }
+  } catch (e) {
+    archiveState[label] = { status: 'err', msg: 'could not reach archive', at: Date.now() };
+  }
+  renderFlagsPanel();
+  Persist.save();
 }
 
 function isHandmade(model) { return hmOutdoor.has(model) || hmIndoor.has(model); }
@@ -1213,6 +1441,7 @@ function clearAll() {
   if (!confirm('Clear all orders, the pool, any production run, and all digit overrides? This cannot be undone.')) return;
   orders = []; customData = {}; overrides = {}; overrideEditing = null; currentOrderIdx = -1;
   runActive = false; runLabel=''; pendingRush=[]; totalsView='run';
+  archiveState = {};   // archived rows live in the Sheet — only the local status resets
   Persist.clear();
   renderOrderList();
   document.getElementById('content').innerHTML = '<div class="empty-state"><p>All cleared.</p></div>';
@@ -1312,7 +1541,15 @@ function computeFlags() {
   return flags;
 }
 
+// Wrapper: the flags body has several early returns, so the archive panel is
+// refreshed here rather than appended inside it — otherwise it would go stale
+// on exactly the common paths (no orders, all checks passed).
 function renderFlagsPanel() {
+  renderFlagsPanelInner();
+  renderArchivePanel();
+}
+
+function renderFlagsPanelInner() {
   const el = document.getElementById('flagsPanel');
   const countEl = document.getElementById('flagsCount');
   if (!orders.length) {
@@ -1354,6 +1591,61 @@ function renderFlagsPanel() {
 
 // Keep old name working as an alias so existing callers refresh the panel
 function renderOrderList() { renderFlagsPanel(); }
+
+// Archive panel: one row per date label in the pool. A label is offered for
+// archiving once its own blocking flags are clear — info-severity notes (an
+// override was applied, a header count mismatch) never hold a report back.
+function labelBlockingFlags(label) {
+  return computeFlags().filter(f =>
+    f.sev !== 'info' && (f.orders || []).some(o => o.date === label)
+  ).length;
+}
+
+function renderArchivePanel() {
+  const panel = document.getElementById('archivePanel');
+  const count = document.getElementById('archiveCount');
+  if (!panel) return;
+
+  const labels = archiveLabels();
+  if (!labels.length) {
+    panel.innerHTML = '<div class="flags-empty">Nothing to archive yet.</div>';
+    if (count) { count.textContent = ''; count.className = 'flags-count'; }
+    return;
+  }
+
+  const done = labels.filter(l => (archiveState[l] || {}).status === 'ok').length;
+  if (count) {
+    count.textContent = `${done}/${labels.length}`;
+    count.className = 'flags-count' + (done < labels.length ? ' has-issues' : '');
+  }
+
+  panel.innerHTML = labels.map(label => {
+    const meta    = deriveListMeta(label);
+    const st      = archiveState[label] || { status: 'idle' };
+    const blocked = labelBlockingFlags(label);
+    const n       = archivableOrders(label).length;
+
+    let msg = '', cls = '';
+    if (st.status === 'busy')      { msg = st.msg; cls = 'busy'; }
+    else if (st.status === 'ok')   { msg = '✓ ' + st.msg; cls = 'ok'; }
+    else if (st.status === 'err')  { msg = '⚠ ' + st.msg; cls = 'err'; }
+    else if (blocked)              { msg = `${blocked} flag${blocked>1?'s':''} to clear first`; }
+    else if (!n)                   { msg = 'no orders in this run'; }
+    else                           { msg = `${n} order${n>1?'s':''} ready`; }
+
+    const disabled = st.status === 'busy' || blocked > 0 || !n;
+    const btnLabel = st.status === 'ok' ? 'Re-archive' : 'Archive';
+
+    return `<div class="arc-item">
+      <div class="arc-top">
+        <span class="arc-label">${label}</span>
+        <button class="arc-btn" ${disabled?'disabled':''}
+          onclick="archiveLabel('${label.replace(/'/g,"\\'")}')">${btnLabel}</button>
+      </div>
+      <div class="arc-msg ${cls}">${meta.familyType} · ${msg}</div>
+    </div>`;
+  }).join('');
+}
 
 // ── VIEW SWITCHING ────────────────────────────────────────────────────────────
 function showView(view) {
